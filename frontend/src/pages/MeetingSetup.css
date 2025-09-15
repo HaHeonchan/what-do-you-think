@@ -1,0 +1,94 @@
+/* src/pages/MeetingSetup.css */
+
+.meeting-setup-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding-bottom: 4rem;
+}
+
+.setup-header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+.setup-header h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+.setup-header p {
+  font-size: 1.1rem;
+  color: #666;
+}
+
+.setup-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+.setup-card h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.topic-input {
+  width: 100%;
+  min-height: 120px;
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.add-ai-btn {
+  background: none;
+  border: 1px solid #8A2BE2;
+  color: #8A2BE2;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.add-ai-btn:hover {
+  background: #8A2BE2;
+  color: white;
+}
+
+.placeholder-text {
+  color: #888;
+}
+
+.start-meeting-container {
+  text-align: center;
+  margin-top: 2rem;
+}
+
+.start-meeting-btn {
+  background-color: #8A2BE2;
+  color: white;
+  border: none;
+  padding: 1rem 2.5rem;
+  border-radius: 12px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(138, 43, 226, 0.3);
+}
+.start-meeting-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(138, 43, 226, 0.4);
+}

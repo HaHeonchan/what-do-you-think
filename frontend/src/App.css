@@ -1,38 +1,124 @@
-.App {
-  text-align: center;
+/* 기본 스타일 리셋 */
+body, ul, li, h1, p, button {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.app-container {
+  display: flex;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+/* --- 사이드바 스타일 --- */
+.sidebar {
+  height: 100vh;
+  background-color: #8A2BE2; /* 보라색 계열 */
+  color: white;
+  position: fixed;
+  top: 0;
+  left: 0;
+  transition: width 0.2s ease-in-out;
+  z-index: 10;
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.sidebar.open {
+  width: 250px;
+}
+
+.sidebar.closed {
+  width: 80px;
+}
+
+.sidebar-menu {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  padding: 15px;
+  overflow-x: hidden;
+}
+
+/* 모든 메뉴 아이템(링크, div, 버튼) 공통 스타일 */
+.menu-item a,
+.menu-item div,
+.menu-item .menu-button {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+  height: 50px;
+  width: 100%;
+  padding: 0 0px;
   color: white;
+  text-decoration: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease-in-out;
+  
+  /* 버튼 기본 스타일 리셋 */
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
 }
 
-.App-link {
-  color: #61dafb;
+.menu-item a:hover,
+.menu-item div:hover,
+.menu-item .menu-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.menu-icon {
+  font-size: 24px;
+  min-width: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.menu-text {
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.sidebar.open .menu-text {
+  opacity: 1;
+}
+
+.sub-menu {
+  padding-left: 20px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.2s ease-in-out;
+}
+
+.sub-menu.open {
+  max-height: 200px;
+}
+
+.sub-menu li a {
+  padding-left: 34px;
+  font-size: 0.9em;
+}
+
+/* 설정 아이템을 하단으로 보내는 스타일 */
+.settings-item {
+  margin-top: auto;
+  margin-bottom: 20px;
+}
+
+/* --- 메인 콘텐츠 스타일 --- */
+.main-content {
+  flex-grow: 1;
+  padding: 2rem;
+  transition: margin-left 0.2s ease-in-out;
+}
+
+.main-content.sidebar-open {
+  margin-left: 250px;
+}
+
+.main-content.sidebar-closed {
+  margin-left: 80px;
 }

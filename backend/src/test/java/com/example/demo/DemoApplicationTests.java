@@ -1,10 +1,10 @@
-package com.example.what_do_you_think;
+package com.example.demo;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class WhatDoYouThinkApplicationTests {
+class DemoApplicationTests {
 
 	@Test
 	void contextLoads() {

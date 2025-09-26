@@ -2,6 +2,7 @@ import React from 'react'
 import SubTitle from './SubTitle';
 import Clock from './Clock';
 import Note from './Note';
+import Chat from './Chat';
 
 const notes = [
     {
@@ -20,6 +21,7 @@ function Title(props) {
         <h1>{`제목`}</h1>
         <SubTitle title={"고라니"}/>
         <Clock />
+        <Chat />
         {notes.map((notes) => (
             <Note title={notes.title} content={notes.content} />
         ))}

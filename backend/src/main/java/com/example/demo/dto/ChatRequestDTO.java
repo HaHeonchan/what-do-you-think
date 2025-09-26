@@ -7,4 +7,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class ChatRequestDTO {
     private String question;
+    private String sender;
+    private String receiver;
 }

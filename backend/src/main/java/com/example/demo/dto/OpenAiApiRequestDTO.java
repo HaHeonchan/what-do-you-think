@@ -13,8 +13,13 @@ public class OpenAiApiRequestDTO {
         this.messages = List.of(new Message("user", prompt));
     }
 
+    public OpenAiApiRequestDTO(String model, List<Message> messages) {
+        this.model = model;
+        this.messages = messages;
+    }
+
     @Getter
-    private static class Message {
+    public static class Message {
         private final String role;
         private final String content;
 

@@ -15,12 +15,13 @@ import org.hibernate.annotations.GenericGenerator;
 @Table(name = "chats")
 public class ChatEntity {
     @Id
-    @GeneratedValue(generator = "system-uuid")
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     @Lob // long messages for AI
     private String message;
 
     private String sender;
+
     private String timestamp;
 }

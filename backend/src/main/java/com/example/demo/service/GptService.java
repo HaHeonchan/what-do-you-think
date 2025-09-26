@@ -40,7 +40,7 @@ public class GptService {
         this.chatRepository = chatRepository;
     }
 
-    @Transactional
+    @Transactional //DB를 트렌젝션(묶어서)으로 처리
     public ChatResponseDTO askQuestion(ChatRequestDTO requestDTO) {
         // 1. 사용자 질문을 DB에 저장
         ChatEntity userMessage = ChatEntity.builder()
@@ -83,7 +83,6 @@ public class GptService {
         if (apiResponse != null && !apiResponse.getChoices().isEmpty()) {
             answer = apiResponse.getChoices().get(0).getMessage().getContent();
             ChatEntity assistantMessage = ChatEntity.builder()
-                    .id(UUID.randomUUID().toString())
                     .message(answer)
                     .sender(requestDTO.getReceiver())
                     .timestamp(Instant.now().toString())

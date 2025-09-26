@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -41,19 +42,8 @@ public class GptService {
     }
 
     @Transactional //DB를 트렌젝션(묶어서)으로 처리
-    public ChatResponseDTO askQuestion(ChatRequestDTO requestDTO) {
-        // 1. 사용자 질문을 DB에 저장
-        ChatEntity userMessage = ChatEntity.builder()
-                .message(requestDTO.getQuestion())
-                .sender(requestDTO.getSender())
-                .timestamp(Instant.now().toString())
-                .build();
-        chatRepository.save(userMessage);
-
-        // 2. 이전 대화 기록을 시간순으로 불러오기
-        List<ChatEntity> chatHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
-
-        System.out.println("userMessage saved: " + chatHistory);
+    public ChatEntity requestGpt(ChatRequestDTO requestDTO, List<ChatEntity> chatHistory) {
+        List<ChatEntity> aiResponses = new ArrayList<>();
 
         // 3. OpenAI API 요청에 맞게 메시지 목록 생성
         List<OpenAiApiRequestDTO.Message> messages = chatHistory.stream()
@@ -77,20 +67,20 @@ public class GptService {
                 httpEntity,
                 OpenAiApiResponseDTO.class
         );
-
+        ChatEntity assistantMessage = null;
         // 8. 응답에서 답변 추출 후 DB에 저장
         String answer = "오류: 답변을 받아올 수 없습니다.";
         if (apiResponse != null && !apiResponse.getChoices().isEmpty()) {
             answer = apiResponse.getChoices().get(0).getMessage().getContent();
-            ChatEntity assistantMessage = ChatEntity.builder()
+            assistantMessage = ChatEntity.builder()
                     .message(answer)
-                    .sender(requestDTO.getReceiver())
+                    .sender("user") // 명확한 값으로 변경 (테스트용으로, assistant에서 user로 변경)
                     .timestamp(Instant.now().toString())
                     .build();
-            chatRepository.save(assistantMessage);
+            System.out.println(answer);
         }
 
-        return new ChatResponseDTO(answer);
+        return assistantMessage; // List<ChatEntity>를 반환합니다.
     }
 
 }

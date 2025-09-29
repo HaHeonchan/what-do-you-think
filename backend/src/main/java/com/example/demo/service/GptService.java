@@ -42,13 +42,23 @@ public class GptService {
     }
 
     @Transactional //DB를 트렌젝션(묶어서)으로 처리
-    public ChatEntity requestGpt(ChatRequestDTO requestDTO, List<ChatEntity> chatHistory) {
+    public ChatEntity requestGpt(ChatRequestDTO requestDTO, List<ChatEntity> chatHistory, String promptContent) {
         List<ChatEntity> aiResponses = new ArrayList<>();
 
         // 3. OpenAI API 요청에 맞게 메시지 목록 생성
         List<OpenAiApiRequestDTO.Message> messages = chatHistory.stream()
                 .map(chat -> new OpenAiApiRequestDTO.Message(chat.getSender(), chat.getMessage()))
                 .collect(Collectors.toList());
+
+        if (promptContent != null && !promptContent.isEmpty()) {
+            messages.add(new OpenAiApiRequestDTO.Message("system", promptContent));
+        }
+
+        // 기존 대화 기록을 이어서 추가합니다.
+        List<OpenAiApiRequestDTO.Message> historyMessages = chatHistory.stream()
+                .map(chat -> new OpenAiApiRequestDTO.Message(chat.getSender(), chat.getMessage()))
+                .toList();
+        messages.addAll(historyMessages);
 
         // 4. HTTP 헤더 설정
         HttpHeaders headers = new HttpHeaders();
@@ -74,7 +84,7 @@ public class GptService {
             answer = apiResponse.getChoices().get(0).getMessage().getContent();
             assistantMessage = ChatEntity.builder()
                     .message(answer)
-                    .sender("user") // 명확한 값으로 변경 (테스트용으로, assistant에서 user로 변경)
+                    .sender("assistant")
                     .timestamp(Instant.now().toString())
                     .build();
             System.out.println(answer);

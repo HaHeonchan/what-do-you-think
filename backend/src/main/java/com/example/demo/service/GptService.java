@@ -84,7 +84,7 @@ public class GptService {
             answer = apiResponse.getChoices().get(0).getMessage().getContent();
             assistantMessage = ChatEntity.builder()
                     .message(answer)
-                    .sender("assistant")
+                    .sender("user") //사실은 LLM
                     .timestamp(Instant.now().toString())
                     .build();
             System.out.println(answer);

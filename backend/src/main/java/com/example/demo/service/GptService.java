@@ -52,17 +52,16 @@ public class GptService {
         // requestBody 생성
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", model);
-        requestBody.put("max_tokens", 126);
-        requestBody.put("temperature", 0.3);
+        requestBody.put("max_completion_tokens", 4098);
 
         // 채팅 기록 반영
-        List<Map<String, String>> messages = chatHistory.stream()
+        List<Map<String, String>> messages = new ArrayList<>(chatHistory.stream()
                 .map(chat -> {
                     Map<String, String> message = new HashMap<>();
                     message.put("role", chat.getSender()); // sender를 role로 매핑
                     message.put("content", chat.getMessage()); // message를 content로 매핑
                     return message;
-                }).toList();
+                }).toList());
 
         // 프롬프트 반영
         if (promptContent != null && !promptContent.isEmpty()) {
@@ -84,69 +83,20 @@ public class GptService {
                 OpenAiApiResponseDTO.class
         );
 
-        // 응답 처리
         ChatEntity assistantMessage = null;
+        // 응답에서 답변 추출 후 DB에 저장
+        String answer = "오류: 답변을 받아올 수 없습니다.";
         if (apiResponse != null && !apiResponse.getChoices().isEmpty()) {
-            String answer = apiResponse.getChoices().get(0).getMessage().getContent();
+            answer = apiResponse.getChoices().get(0).getMessage().getContent();
             assistantMessage = ChatEntity.builder()
                     .message(answer)
                     .sender("user")
                     .timestamp(Instant.now().toString())
                     .build();
             System.out.println("ok");
-        } else {
-            // 오류 처리 로직
-            assistantMessage = ChatEntity.builder()
-                    .message("오류: 답변을 받아올 수 없습니다.")
-                    .sender("system")
-                    .timestamp(Instant.now().toString())
-                    .build();
         }
 
-        return assistantMessage;
-
-        //        List<ChatEntity> aiResponses = new ArrayList<>();
-//
-//        // 3. OpenAI API 요청에 맞게 메시지 목록 생성
-//        List<OpenAiApiRequestDTO.Message> messages = chatHistory.stream()
-//                .map(chat -> new OpenAiApiRequestDTO.Message(chat.getSender(), chat.getMessage()))
-//                .collect(Collectors.toList());
-//
-//        if (promptContent != null && !promptContent.isEmpty()) {
-//            messages.add(new OpenAiApiRequestDTO.Message("system", promptContent));
-//        }
-//
-//        // 4. HTTP 헤더 설정
-//        HttpHeaders headers = new HttpHeaders();
-//        headers.setContentType(MediaType.APPLICATION_JSON);
-//        headers.setBearerAuth(apiKey);
-//
-//        // 5. 요청 본문(Body) 생성 (전체 대화 기록 포함)
-//        OpenAiApiRequestDTO apiRequest = new OpenAiApiRequestDTO(model, messages, max_tokens);
-//
-//        // 6. 헤더와 본문을 합쳐 HttpEntity 객체 생성
-//        HttpEntity<OpenAiApiRequestDTO> httpEntity = new HttpEntity<>(apiRequest, headers);
-//
-//        // 7. RestTemplate을 사용하여 POST 요청 보내기
-//        OpenAiApiResponseDTO apiResponse = restTemplate.postForObject(
-//                API_URL,
-//                httpEntity,
-//                OpenAiApiResponseDTO.class
-//        );
-//        ChatEntity assistantMessage = null;
-//        // 8. 응답에서 답변 추출 후 DB에 저장
-//        String answer = "오류: 답변을 받아올 수 없습니다.";
-//        if (apiResponse != null && !apiResponse.getChoices().isEmpty()) {
-//            answer = apiResponse.getChoices().get(0).getMessage().getContent();
-//            assistantMessage = ChatEntity.builder()
-//                    .message(answer)
-//                    .sender("user") //사실은 LLM
-//                    .timestamp(Instant.now().toString())
-//                    .build();
-//            System.out.println("ok");
-//        }
-//
-//        return assistantMessage; // List<ChatEntity>를 반환합니다.
+        return assistantMessage; // List<ChatEntity>를 반환합니다.
     }
 
 }

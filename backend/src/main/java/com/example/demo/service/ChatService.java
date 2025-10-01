@@ -6,6 +6,7 @@ import com.example.demo.dto.ChatRequestDTO;
 import com.example.demo.dto.ChatResponseDTO;
 import com.example.demo.entity.ChatEntity;
 import com.example.demo.repository.ChatRepository;
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 

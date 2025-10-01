@@ -42,12 +42,12 @@ public class ChatService {
                     .toList();
         }
 
-        System.out.println("조회된 실제 프롬프트 객체: " + selectedPrompts);
+        System.out.println("\nselectedPrompts : " + selectedPrompts);
 
         List<String> promptContents = selectedPrompts.stream()
                 .map(PromptDTO::getContent)
                 .toList();
-        System.out.println("프롬프트 내용만 추출: " + promptContents);
+        System.out.println("\npromptContents: " + promptContents);
 
         ChatEntity userMessage = ChatEntity.builder()
                 .message(requestDTO.getQuestion())
@@ -61,14 +61,14 @@ public class ChatService {
             List<ChatEntity> chatHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
             List<ChatEntity> batchChatHistory = new ArrayList<>(); // 이번 턴의 답변들을 모을 리스트
 
-            System.out.println("GPT 요청 직전 대화 기록: " + chatHistory);
+            System.out.println("\nGPT chatHistory: " + chatHistory);
 
             for (PromptDTO prompt : selectedPrompts) { // 리스트의 각 PromptDTO를 'prompt' 변수에 담습니다.
 
                 // 4. 현재 순서의 prompt 객체에서 content 문자열만 추출합니다.
                 String currentPromptContent = prompt.getContent();
 
-                System.out.println("현재 적용되는 프롬프트 역할: " + prompt.getRole()); // 역할(role)도 확인 가능
+                System.out.println("\npromptRole: " + prompt.getRole()); // 역할(role)도 확인 가능
 
                 // 5. gptService에 추출한 프롬프트 내용(currentPromptContent)을 전달합니다.
                 ChatEntity answer = gptService.requestGpt(requestDTO, chatHistory, currentPromptContent);

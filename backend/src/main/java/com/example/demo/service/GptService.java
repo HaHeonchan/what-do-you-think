@@ -43,7 +43,7 @@ public class GptService {
     }
 
     @Transactional //DB를 트렌젝션(묶어서)으로 처리
-    public ChatEntity requestGpt(ChatRequestDTO requestDTO, List<ChatEntity> chatHistory, String promptContent) {
+    public ChatEntity requestGpt(ChatRequestDTO requestDTO, List<ChatEntity> chatHistory, String promptContent, String senderRole) {
         // HTTP 헤더 설정
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -58,8 +58,14 @@ public class GptService {
         List<Map<String, String>> messages = new ArrayList<>(chatHistory.stream()
                 .map(chat -> {
                     Map<String, String> message = new HashMap<>();
-                    message.put("role", chat.getSender()); // sender를 role로 매핑
-                    message.put("content", chat.getMessage()); // message를 content로 매핑
+
+                    String role = chat.getSender();
+                    if (!role.equals("user") && !role.equals("system")) {
+                        role = "assistant";
+                    }
+
+                    message.put("role", role);
+                    message.put("content", chat.getMessage());
                     return message;
                 }).toList());
 
@@ -90,13 +96,13 @@ public class GptService {
             answer = apiResponse.getChoices().get(0).getMessage().getContent();
             assistantMessage = ChatEntity.builder()
                     .message(answer)
-                    .sender("user")
+                    .sender(senderRole)
                     .timestamp(Instant.now().toString())
                     .build();
             System.out.println("ok");
         }
 
-        return assistantMessage; // List<ChatEntity>를 반환합니다.
+        return assistantMessage;
     }
 
 }

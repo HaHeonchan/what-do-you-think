@@ -6,14 +6,12 @@ import com.example.demo.dto.ChatRequestDTO;
 import com.example.demo.dto.ChatResponseDTO;
 import com.example.demo.entity.ChatEntity;
 import com.example.demo.repository.ChatRepository;
-import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,60 +26,80 @@ public class ChatService {
         this.promptLoader = promptLoader;
     }
 
-    public ChatResponseDTO askQuestion(ChatRequestDTO requestDTO){
-        //사용자의 응답을 받아 그 응답에 대해 스스로 Q&A 하는 기능
+    public ChatResponseDTO askQuestion(ChatRequestDTO requestDTO) {
         List<String> promptKeys = requestDTO.getPromptKeys();
 
-        // 2. String 리스트가 아닌 Prompt 객체 리스트를 받도록 변경
-        List<PromptDTO> selectedPrompts = new ArrayList<>();
-
-        if (promptKeys != null && !promptKeys.isEmpty()) {
-            selectedPrompts = promptKeys.stream()
-                    // promptLoader에서 key로 Prompt 객체를 조회
-                    .map(key -> promptLoader.getPrompts().get(key))
-                    .filter(Objects::nonNull)
-                    .toList();
-        }
-
-        System.out.println("\nselectedPrompts : " + selectedPrompts);
-
-        List<String> promptContents = selectedPrompts.stream()
-                .map(PromptDTO::getContent)
-                .toList();
-        System.out.println("\npromptContents: " + promptContents);
-
+        // 1. 사용자의 메시지를 'user'로 먼저 저장
         ChatEntity userMessage = ChatEntity.builder()
                 .message(requestDTO.getQuestion())
-                .sender(requestDTO.getSender())
+                .sender("user")
                 .timestamp(Instant.now().toString())
                 .build();
         chatRepository.save(userMessage);
 
+        // 2. AI에게 컨텍스트를 제공하기 위해 방금 저장한 메시지를 포함한 전체 대화 기록을 조회
+        List<ChatEntity> chatHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
+        List<ChatEntity> batchChatHistory = new ArrayList<>(); // 이번 턴의 AI 답변들을 모을 리스트
 
-        for(int i=0; i<1; i++) {
-            List<ChatEntity> chatHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
-            List<ChatEntity> batchChatHistory = new ArrayList<>(); // 이번 턴의 답변들을 모을 리스트
+        System.out.println("\nGPT chatHistory: " + chatHistory);
 
-            System.out.println("\nGPT chatHistory: " + chatHistory);
+        if (promptKeys != null && !promptKeys.isEmpty()) {
+            for (String promptKey : promptKeys) { // "creator", "critic" 등 프롬프트 키로 순회
+                PromptDTO prompt = promptLoader.getPrompts().get(promptKey);
+                if (prompt == null) {
+                    continue;
+                }
 
-            for (PromptDTO prompt : selectedPrompts) { // 리스트의 각 PromptDTO를 'prompt' 변수에 담습니다.
-
-                // 4. 현재 순서의 prompt 객체에서 content 문자열만 추출합니다.
                 String currentPromptContent = prompt.getContent();
+                System.out.println("\nProcessing role: " + promptKey);
 
-                System.out.println("\npromptRole: " + prompt.getRole()); // 역할(role)도 확인 가능
+                // 3. 수정된 GptService 호출 (promptKey를 sender 역할로 전달)
+                // GptService는 이제 AI의 답변을 'creator'와 같은 역할 이름으로 저장합니다.
+                ChatEntity answer = gptService.requestGpt(requestDTO, chatHistory, currentPromptContent, promptKey);
 
-                // 5. gptService에 추출한 프롬프트 내용(currentPromptContent)을 전달합니다.
-                ChatEntity answer = gptService.requestGpt(requestDTO, chatHistory, currentPromptContent);
-                if(answer != null){
+                if (answer != null) {
                     batchChatHistory.add(answer);
                 }
             }
-
-            // 이번 턴에서 생성된 모든 답변(batchChatHistory)을 DB에 한번에 저장합니다.
-            chatRepository.saveAll(batchChatHistory);
         }
 
-        return new ChatResponseDTO(null);
+        // 4. 이번 턴에서 생성된 모든 AI 답변들을 DB에 한번에 저장
+        chatRepository.saveAll(batchChatHistory);
+
+        // 5. 생성된 답변들의 메시지만 추출하여 DTO에 담아 반환
+        List<String> responses = batchChatHistory.stream()
+                .map(ChatEntity::getMessage)
+                .toList();
+
+        return new ChatResponseDTO(responses.toString());
+    }
+
+    public ChatResponseDTO summarizeConversation() {
+        // 1. 전체 대화 기록을 가져옵니다.
+        List<ChatEntity> chatHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
+        if (chatHistory.isEmpty()) {
+            return new ChatResponseDTO("요약할 대화 내용이 없습니다.");
+        }
+
+        // 2. 'summarizer' 프롬프트를 로드합니다.
+        PromptDTO summarizerPrompt = promptLoader.getPrompts().get("summarizer");
+        if (summarizerPrompt == null) {
+            return new ChatResponseDTO("오류: Summarizer 프롬프트를 찾을 수 없습니다.");
+        }
+        String summarizerContent = summarizerPrompt.getContent();
+
+        // 3. GptService를 호출하여 요약을 요청합니다.
+        // 이 호출에서는 requestDTO의 특정 내용이 필요하지 않을 수 있습니다.
+        ChatRequestDTO dummyRequest = new ChatRequestDTO();
+        ChatEntity summary = gptService.requestGpt(dummyRequest, chatHistory, summarizerContent, "summarizer");
+
+        // 4. (선택사항) 생성된 요약 내용을 DB에 저장합니다.
+        if (summary != null) {
+            chatRepository.save(summary);
+        }
+
+        // 5. 요약 결과를 DTO에 담아 반환합니다.
+        String summaryContent = (summary != null) ? summary.getMessage() : "요약 생성에 실패했습니다.";
+        return new ChatResponseDTO(summaryContent);
     }
 }

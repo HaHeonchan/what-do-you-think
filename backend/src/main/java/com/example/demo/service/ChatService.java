@@ -17,11 +17,13 @@ public class ChatService {
     private final ChatRepository chatRepository;
     private final GptService gptService;
     private final PromptLoader promptLoader;
+    private final java.util.concurrent.Executor gptExecutor;
 
-    public ChatService(ChatRepository chatRepository, GptService gptService, PromptLoader promptLoader) {
+    public ChatService(ChatRepository chatRepository, GptService gptService, PromptLoader promptLoader, java.util.concurrent.Executor gptExecutor) {
         this.chatRepository = chatRepository;
         this.gptService = gptService;
         this.promptLoader = promptLoader;
+        this.gptExecutor = gptExecutor;
     }
 
     public ChatResponseDTO askQuestion(ChatRequestDTO requestDTO) {
@@ -45,17 +47,25 @@ public class ChatService {
         }
 
         for (int round = 0; round < rounds; round++) {
-            List<ChatEntity> roundAnswers = new ArrayList<>();
-
+            List<java.util.concurrent.CompletableFuture<ChatEntity>> futures = new ArrayList<>();
             for (String roleKey : promptKeys) {
                 String systemContent = buildSystemContent(roleKey, isFirstTurn);
                 List<java.util.Map<String, String>> messages = buildMessages(systemContent, requestDTO.getQuestion(), allHistory, roleKey, isFirstTurn);
 
-                ChatEntity answer = gptService.requestGpt(messages, roleKey);
-                if (answer != null) {
-                    roundAnswers.add(answer);
-                }
+                java.util.concurrent.CompletableFuture<ChatEntity> future =
+                        java.util.concurrent.CompletableFuture.supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
+                                .orTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+                                .exceptionally(ex -> {
+                                    System.err.println("GPT 요청 실패(" + roleKey + "): " + ex.getMessage());
+                                    return null;
+                                });
+                futures.add(future);
             }
+
+            List<ChatEntity> roundAnswers = futures.stream()
+                    .map(java.util.concurrent.CompletableFuture::join)
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
 
             if (!roundAnswers.isEmpty()) {
                 chatRepository.saveAll(roundAnswers);

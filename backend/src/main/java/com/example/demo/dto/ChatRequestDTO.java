@@ -12,4 +12,5 @@ public class ChatRequestDTO {
     private String sender;
     private String receiver;
     private List<String> promptKeys;
+    private Integer conversationRounds; // AI끼리의 대화 횟수
 }

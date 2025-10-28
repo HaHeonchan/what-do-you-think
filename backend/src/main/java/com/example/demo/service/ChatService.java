@@ -1,7 +1,6 @@
 package com.example.demo.service;
 
 import com.example.demo.config.PromptLoader;
-import com.example.demo.dto.PromptDTO;
 import com.example.demo.dto.ChatRequestDTO;
 import com.example.demo.dto.ChatResponseDTO;
 import com.example.demo.entity.ChatEntity;
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class ChatService {
@@ -27,9 +25,7 @@ public class ChatService {
     }
 
     public ChatResponseDTO askQuestion(ChatRequestDTO requestDTO) {
-        List<String> promptKeys = requestDTO.getPromptKeys();
-
-        // 1. 사용자의 메시지를 'user'로 먼저 저장
+        // 1) 사용자 입력 저장
         ChatEntity userMessage = ChatEntity.builder()
                 .message(requestDTO.getQuestion())
                 .sender("user")
@@ -37,41 +33,121 @@ public class ChatService {
                 .build();
         chatRepository.save(userMessage);
 
-        // 2. AI에게 컨텍스트를 제공하기 위해 방금 저장한 메시지를 포함한 전체 대화 기록을 조회
-        List<ChatEntity> chatHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
-        List<ChatEntity> batchChatHistory = new ArrayList<>(); // 이번 턴의 AI 답변들을 모을 리스트
+        // 2) 컨텍스트 로드 및 첫 턴 판정
+        List<ChatEntity> allHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
+        boolean isFirstTurn = isFirstTurn(allHistory);
 
-        System.out.println("\nGPT chatHistory: " + chatHistory);
+        // 라운드 수 및 프롬프트 키 검증
+        int rounds = requestDTO.getConversationRounds() != null ? requestDTO.getConversationRounds() : 1;
+        List<String> promptKeys = requestDTO.getPromptKeys();
+        if (promptKeys == null || promptKeys.isEmpty()) {
+            return new ChatResponseDTO("프롬프트 키가 없습니다.");
+        }
 
-        if (promptKeys != null && !promptKeys.isEmpty()) {
-            for (String promptKey : promptKeys) { // "creator", "critic" 등 프롬프트 키로 순회
-                PromptDTO prompt = promptLoader.getPrompts().get(promptKey);
-                if (prompt == null) {
-                    continue;
-                }
+        for (int round = 0; round < rounds; round++) {
+            List<ChatEntity> roundAnswers = new ArrayList<>();
 
-                String currentPromptContent = prompt.getContent();
-                System.out.println("\nProcessing role: " + promptKey);
+            for (String roleKey : promptKeys) {
+                String systemContent = buildSystemContent(roleKey, isFirstTurn);
+                List<java.util.Map<String, String>> messages = buildMessages(systemContent, requestDTO.getQuestion(), allHistory, roleKey, isFirstTurn);
 
-                // 3. 수정된 GptService 호출 (promptKey를 sender 역할로 전달)
-                // GptService는 이제 AI의 답변을 'creator'와 같은 역할 이름으로 저장합니다.
-                ChatEntity answer = gptService.requestGpt(requestDTO, chatHistory, currentPromptContent, promptKey);
-
+                ChatEntity answer = gptService.requestGpt(messages, roleKey);
                 if (answer != null) {
-                    batchChatHistory.add(answer);
+                    roundAnswers.add(answer);
+                }
+            }
+
+            if (!roundAnswers.isEmpty()) {
+                chatRepository.saveAll(roundAnswers);
+                // 메모리 컨텍스트에도 즉시 반영 (불필요한 재조회 방지)
+                allHistory.addAll(roundAnswers);
+                isFirstTurn = false;
+            }
+        }
+
+        String summary = summarize(allHistory);
+        return new ChatResponseDTO(summary);
+    }
+
+    private boolean isFirstTurn(List<ChatEntity> history) {
+        return history.stream().noneMatch(c -> !"user".equals(c.getSender()) && !"system".equals(c.getSender()));
+    }
+
+    private String buildSystemContent(String roleKey, boolean isFirstTurn) {
+        String base = promptLoader.getPrompt(roleKey);
+        String guide = promptLoader.getInstruction(isFirstTurn ? "initial_response" : "debate_response");
+        String safeBase = base == null ? "" : base;
+        String safeGuide = guide == null ? "" : guide;
+        return safeBase + (safeGuide.isEmpty() ? "" : "\n\n" + safeGuide);
+    }
+
+    private List<java.util.Map<String, String>> buildMessages(String systemContent, String userQuestion, List<ChatEntity> history, String currentRole, boolean isFirstTurn) {
+        List<java.util.Map<String, String>> messages = new ArrayList<>();
+
+        java.util.Map<String, String> system = new java.util.HashMap<>();
+        system.put("role", "system");
+        system.put("content", systemContent);
+        messages.add(system);
+
+        java.util.Map<String, String> user = new java.util.HashMap<>();
+        user.put("role", "user");
+        user.put("content", userQuestion);
+        messages.add(user);
+
+        if (!isFirstTurn) {
+            // 최근 사용자 이후의 다른 에이전트 응답들만 포함
+            int lastUserIdx = findLastUserIndex(history);
+            for (int i = lastUserIdx + 1; i < history.size(); i++) {
+                ChatEntity chat = history.get(i);
+                String sender = chat.getSender();
+                if (!"user".equals(sender) && !"system".equals(sender) && !currentRole.equals(sender)) {
+                    java.util.Map<String, String> assistant = new java.util.HashMap<>();
+                    assistant.put("role", "assistant");
+                    assistant.put("content", chat.getMessage());
+                    messages.add(assistant);
                 }
             }
         }
 
-        // 4. 이번 턴에서 생성된 모든 AI 답변들을 DB에 한번에 저장
-        chatRepository.saveAll(batchChatHistory);
+        return messages;
+    }
 
-        // 5. 생성된 답변들의 메시지만 추출하여 DTO에 담아 반환
-        List<String> responses = batchChatHistory.stream()
-                .map(ChatEntity::getMessage)
-                .toList();
+    private int findLastUserIndex(List<ChatEntity> history) {
+        for (int i = history.size() - 1; i >= 0; i--) {
+            if ("user".equals(history.get(i).getSender())) {
+                return i;
+            }
+        }
+        return -1;
+    }
 
-        return new ChatResponseDTO(responses.toString());
+    private String summarize(List<ChatEntity> history) {
+        if (history.isEmpty()) return "요약할 대화 내용이 없습니다.";
+
+        String summarizer = promptLoader.getPrompt("summarizer");
+        if (summarizer == null) return "요약 프롬프트를 찾을 수 없습니다.";
+
+        List<java.util.Map<String, String>> messages = new ArrayList<>();
+        java.util.Map<String, String> system = new java.util.HashMap<>();
+        system.put("role", "system");
+        system.put("content", summarizer);
+        messages.add(system);
+
+        for (ChatEntity chat : history) {
+            java.util.Map<String, String> m = new java.util.HashMap<>();
+            String role = chat.getSender();
+            if (!"user".equals(role) && !"system".equals(role)) role = "assistant";
+            m.put("role", role);
+            m.put("content", chat.getMessage());
+            messages.add(m);
+        }
+
+        ChatEntity summary = gptService.requestGpt(messages, "summarizer");
+        if (summary != null) {
+            chatRepository.save(summary);
+            return summary.getMessage();
+        }
+        return "요약 생성에 실패했습니다.";
     }
 
     public ChatResponseDTO summarizeConversation() {
@@ -82,16 +158,31 @@ public class ChatService {
         }
 
         // 2. 'summarizer' 프롬프트를 로드합니다.
-        PromptDTO summarizerPrompt = promptLoader.getPrompts().get("summarizer");
-        if (summarizerPrompt == null) {
+        String summarizerContent = promptLoader.getPrompt("summarizer");
+        if (summarizerContent == null) {
             return new ChatResponseDTO("오류: Summarizer 프롬프트를 찾을 수 없습니다.");
         }
-        String summarizerContent = summarizerPrompt.getContent();
 
         // 3. GptService를 호출하여 요약을 요청합니다.
-        // 이 호출에서는 requestDTO의 특정 내용이 필요하지 않을 수 있습니다.
-        ChatRequestDTO dummyRequest = new ChatRequestDTO();
-        ChatEntity summary = gptService.requestGpt(dummyRequest, chatHistory, summarizerContent, "summarizer");
+        // system + history 로 메시지 구성
+        List<java.util.Map<String, String>> messages = new java.util.ArrayList<>();
+        java.util.Map<String, String> systemMessage = new java.util.HashMap<>();
+        systemMessage.put("role", "system");
+        systemMessage.put("content", summarizerContent);
+        messages.add(systemMessage);
+
+        for (ChatEntity chat : chatHistory) {
+            java.util.Map<String, String> msg = new java.util.HashMap<>();
+            String role = chat.getSender();
+            if (!role.equals("user") && !role.equals("system")) {
+                role = "assistant";
+            }
+            msg.put("role", role);
+            msg.put("content", chat.getMessage());
+            messages.add(msg);
+        }
+
+        ChatEntity summary = gptService.requestGpt(messages, "summarizer");
 
         // 4. (선택사항) 생성된 요약 내용을 DB에 저장합니다.
         if (summary != null) {

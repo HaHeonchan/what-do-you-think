@@ -27,19 +27,19 @@ public class PromptLoader {
         this.instructions = new HashMap<>();
         
         // 마크다운 파일들 로드
-        String[] promptFiles = {"creator.md", "critic.md", "analyst.md", "summarizer.md"};
-        
+        String[] promptFiles = {"creator.md", "critic.md", "analyst.md", "summarizer.md", "moderator.md"};
+
         for (String fileName : promptFiles) {
             try {
                 Resource resource = resourceLoader.getResource("classpath:prompts/" + fileName);
                 if (resource.exists()) {
                     InputStream inputStream = resource.getInputStream();
                     String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    
+
                     // 파일명에서 확장자 제거하여 키로 사용
                     String key = fileName.substring(0, fileName.lastIndexOf('.'));
                     prompts.put(key, content);
-                    
+
                     System.out.println("마크다운 파일 로드 성공: " + fileName);
                 } else {
                     System.err.println("마크다운 파일을 찾을 수 없습니다: " + fileName);
@@ -48,7 +48,7 @@ public class PromptLoader {
                 System.err.println("마크다운 파일 로드 실패: " + fileName + " - " + e.getMessage());
             }
         }
-        
+
         System.out.println("총 " + prompts.size() + "개의 마크다운 프롬프트를 로드했습니다.");
 
         // 지시사항(instructions) 로드

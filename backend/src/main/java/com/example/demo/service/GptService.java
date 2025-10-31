@@ -12,6 +12,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,12 +35,38 @@ public class GptService {
     @Transactional
     public ChatEntity requestGpt(List<Map<String, String>> messages, String senderRole) {
 
-        OpenAiChatOptions options = OpenAiChatOptions.builder()
+        // 1. 공통 옵션 빌더 생성
+        OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
                 .model("gpt-5-nano-2025-08-07")
-                .temperature(0.4)
-                .build();
+                .temperature(1.0);
+        // 2. [핵심] "moderator"일 경우 JSON 모드 활성화
+        if ("moderator".equals(senderRole)) {
+            String schema = """
+            {
+              "type": "object",
+              "properties": {
+                "roleKey": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "다음에 발언할 전문가의 역할 키 (예: ['critic', 'analyst'])"
+                },
+                "messages": {
+                  "type": "string",
+                  "description": "선택된 전문가들에게 전달할 1~3 문장의 짧은 질문",
+                  "maxLength": 200
+                }
+              },
+              "required": ["roleKey", "messages"],
+              "additionalProperties": false
+            }
+           """;
+            optionsBuilder.responseFormat(new ResponseFormat(ResponseFormat.Type.JSON_SCHEMA, schema));
+        }
 
-        // 1. ChatService의 List<Map>을 Spring AI의 List<Message>로 변환
+        // 3. 최종 옵션 빌드
+        OpenAiChatOptions options = optionsBuilder.build();
+
+        // 4. ChatService의 List<Map>을 Spring AI의 List<Message>로 변환
         List<Message> springAiMessages = messages.stream()
                 .map(msgMap -> {
                     String role = msgMap.get("role");
@@ -52,18 +79,16 @@ public class GptService {
                         case "assistant":
                             return new AssistantMessage(content);
                         default:
-                            return new UserMessage(content);
+                            return new UserMessage(content); // 기본값
                     }
                 })
                 .collect(Collectors.toList());
 
-        // 2. Spring AI의 Prompt 객체 생성
-        // application.yml의 model, temperature, max-tokens 설정이
-        // OpenAiChatModel에 의해 자동으로 적용됩니다.
-        Prompt prompt = new Prompt(springAiMessages);
+        Prompt prompt = new Prompt(springAiMessages, options);
 
         ChatResponse response;
         try {
+            // .call()이 Prompt에 포함된 options를 사용합니다.
             response = openAiChatModel.call(prompt);
         } catch (Exception e) {
             System.err.println("Spring AI API 호출 중 오류 발생: " + e.getMessage());
@@ -71,13 +96,11 @@ public class GptService {
             return createErrorEntity(senderRole);
         }
 
-        // 4. 응답 파싱
+        // 6. 응답 파싱 (이하 동일)
         ChatEntity assistantMessage = null;
         String answer = "오류: 답변을 받아올 수 없습니다.";
 
         if (response != null && response.getResult() != null) {
-
-
             answer = response.getResult().getOutput().getText();
 
             assistantMessage = ChatEntity.builder()

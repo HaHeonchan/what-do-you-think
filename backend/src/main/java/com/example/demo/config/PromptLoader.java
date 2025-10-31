@@ -52,7 +52,7 @@ public class PromptLoader {
         System.out.println("총 " + prompts.size() + "개의 마크다운 프롬프트를 로드했습니다.");
 
         // 지시사항(instructions) 로드
-        String[] instructionFiles = {"initial_response.md", "debate_response.md"};
+        String[] instructionFiles = {"debate_response.md"};
         for (String fileName : instructionFiles) {
             try {
                 Resource resource = resourceLoader.getResource("classpath:prompts/instructions/" + fileName);

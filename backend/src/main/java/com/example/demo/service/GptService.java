@@ -1,78 +1,104 @@
 package com.example.demo.service;
 
-import com.example.demo.dto.OpenAiApiResponseDTO;
 import com.example.demo.entity.ChatEntity;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+
+// 1. Spring AI (1.0.3 API)의 올바른 import 경로
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class GptService {
+    private final OpenAiChatModel openAiChatModel;
 
-    private final RestTemplate restTemplate;
-
-    @Value("${spring.ai.openai.api-key}")
-    private String apiKey;
-
-    @Value("${spring.ai.openai.model}")
-    private String model;
-
-    @Value("${spring.ai.openai.api-base-url}")
-    private String API_URL;
-
-    @Value("${spring.ai.openai.max-tokens}")
-    private Integer max_tokens;
-
-    public GptService(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    @Autowired
+    public GptService(OpenAiChatModel openAiChatModel) {
+        this.openAiChatModel = openAiChatModel;
     }
 
-    @Transactional //DB를 트렌젝션(묶어서)으로 처리
+
+    @Transactional
     public ChatEntity requestGpt(List<Map<String, String>> messages, String senderRole) {
-        // HTTP 헤더 설정
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey);
 
-        // requestBody 생성
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", model);
-        requestBody.put("max_completion_tokens", 4098);
+        OpenAiChatOptions options = OpenAiChatOptions.builder()
+                .model("gpt-5-nano-2025-08-07")
+                .temperature(0.4)
+                .build();
 
-        // 완성된 messages 리스트를 requestBody에 추가
-        requestBody.put("messages", messages);
+        // 1. ChatService의 List<Map>을 Spring AI의 List<Message>로 변환
+        List<Message> springAiMessages = messages.stream()
+                .map(msgMap -> {
+                    String role = msgMap.get("role");
+                    String content = msgMap.get("content");
+                    switch (role) {
+                        case "system":
+                            return new SystemMessage(content);
+                        case "user":
+                            return new UserMessage(content);
+                        case "assistant":
+                            return new AssistantMessage(content);
+                        default:
+                            return new UserMessage(content);
+                    }
+                })
+                .collect(Collectors.toList());
 
-        // 헤더와 본문을 합쳐 HttpEntity 객체 생성
-        HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(requestBody, headers);
+        // 2. Spring AI의 Prompt 객체 생성
+        // application.yml의 model, temperature, max-tokens 설정이
+        // OpenAiChatModel에 의해 자동으로 적용됩니다.
+        Prompt prompt = new Prompt(springAiMessages);
 
-        OpenAiApiResponseDTO apiResponse = restTemplate.postForObject(
-                API_URL,
-                httpEntity,
-                OpenAiApiResponseDTO.class
-        );
+        ChatResponse response;
+        try {
+            response = openAiChatModel.call(prompt);
+        } catch (Exception e) {
+            System.err.println("Spring AI API 호출 중 오류 발생: " + e.getMessage());
+            e.printStackTrace();
+            return createErrorEntity(senderRole);
+        }
 
+        // 4. 응답 파싱
         ChatEntity assistantMessage = null;
         String answer = "오류: 답변을 받아올 수 없습니다.";
-        if (apiResponse != null && !apiResponse.getChoices().isEmpty()) {
-            answer = apiResponse.getChoices().get(0).getMessage().getContent();
+
+        if (response != null && response.getResult() != null) {
+
+
+            answer = response.getResult().getOutput().getText();
+
             assistantMessage = ChatEntity.builder()
                     .message(answer)
                     .sender(senderRole)
                     .timestamp(Instant.now().toString())
                     .build();
             System.out.println("ok");
+        } else {
+            assistantMessage = createErrorEntity(senderRole);
         }
 
         return assistantMessage;
     }
 
+    // 오류 발생 시 사용할 헬퍼 메소드 (수정 없음)
+    private ChatEntity createErrorEntity(String senderRole) {
+        return ChatEntity.builder()
+                .message("오류: 답변을 받아올 수 없습니다.")
+                .sender(senderRole)
+                .timestamp(Instant.now().toString())
+                .build();
+    }
 }

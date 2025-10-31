@@ -1,14 +1,16 @@
 spring:
   application:
     name: demo
-
+  devtools:
+    restart:
+      enabled: true
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
       api-base-url: https://api.openai.com/v1/chat/completions
       model: gpt-5-nano-2025-08-07
-      temperature: 0.7
-      max-tokens: 256
+      temperature: 0.3
+      max-tokens: 1024
 
   jpa:
     hibernate:

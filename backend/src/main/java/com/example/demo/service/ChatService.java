@@ -3,31 +3,41 @@ package com.example.demo.service;
 import com.example.demo.config.PromptLoader;
 import com.example.demo.dto.ChatRequestDTO;
 import com.example.demo.dto.ChatResponseDTO;
+import com.example.demo.dto.ModeratorResponseDTO;
 import com.example.demo.entity.ChatEntity;
 import com.example.demo.repository.ChatRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class ChatService {
     private final ChatRepository chatRepository;
     private final GptService gptService;
     private final PromptLoader promptLoader;
-    private final java.util.concurrent.Executor gptExecutor;
+    private final Executor gptExecutor;
+    private final ObjectMapper objectMapper;
 
-    public ChatService(ChatRepository chatRepository, GptService gptService, PromptLoader promptLoader, java.util.concurrent.Executor gptExecutor) {
+    public ChatService(ChatRepository chatRepository, GptService gptService, PromptLoader promptLoader, 
+                      Executor gptExecutor, ObjectMapper objectMapper) {
         this.chatRepository = chatRepository;
         this.gptService = gptService;
         this.promptLoader = promptLoader;
         this.gptExecutor = gptExecutor;
+        this.objectMapper = objectMapper;
     }
 
     public ChatResponseDTO askQuestion(ChatRequestDTO requestDTO) {
-        // 1) 사용자 입력 저장
+        // 사용자 입력 저장
         ChatEntity userMessage = ChatEntity.builder()
                 .message(requestDTO.getQuestion())
                 .sender("user")
@@ -35,83 +45,117 @@ public class ChatService {
                 .build();
         chatRepository.save(userMessage);
 
-        // 2) 컨텍스트 로드 및 첫 턴 판정
-        List<ChatEntity> allHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
-        boolean isFirstTurn = isFirstTurn(allHistory);
-
-        // 라운드 수 및 프롬프트 키 검증
-        int rounds = requestDTO.getConversationRounds() != null ? requestDTO.getConversationRounds() : 1;
+        // 프롬프트 키 검증
         List<String> promptKeys = requestDTO.getPromptKeys();
         if (promptKeys == null || promptKeys.isEmpty()) {
             return new ChatResponseDTO("프롬프트 키가 없습니다.");
         }
 
-        for (int round = 0; round < rounds; round++) {
-            List<java.util.concurrent.CompletableFuture<ChatEntity>> futures = new ArrayList<>();
-            for (String roleKey : promptKeys) {
-                String systemContent = buildSystemContent(roleKey, isFirstTurn);
-                List<java.util.Map<String, String>> messages = buildMessages(systemContent, requestDTO.getQuestion(), allHistory, roleKey, isFirstTurn);
+        // 대화 히스토리 로드
+        List<ChatEntity> allHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
+        
+        // 대화 라운드 수 설정
+        int rounds = 1;
+        if(requestDTO.getConversationRounds() != null) {
+            rounds = requestDTO.getConversationRounds();
+        }
 
-                java.util.concurrent.CompletableFuture<ChatEntity> future =
-                        java.util.concurrent.CompletableFuture.supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
-                                .orTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
-                                .exceptionally(ex -> {
-                                    System.err.println("GPT 요청 실패(" + roleKey + "): " + ex.getMessage());
-                                    return null;
-                                });
+        // 라운드별 처리
+        for (int round = 0; round < rounds; round++) {
+            System.out.println("\n========== 라운드 " + (round + 1) + " ==========");
+            
+            // 사회자에게 누구에게 물어볼지 결정 요청
+            List<Map<String, String>> moderatorMessages = buildMessages("moderator", requestDTO.getQuestion(), allHistory);
+            ChatEntity moderatorResponse = gptService.requestGpt(moderatorMessages, "moderator");
+            
+            // 사회자 응답 출력
+            if (moderatorResponse != null) {
+                System.out.println("[사회자 원본 응답]");
+                System.out.println(moderatorResponse.getMessage());
+                System.out.println("---");
+            } else {
+                System.out.println("[사회자 응답 없음]");
+            }
+            
+            // 사회자 응답 파싱
+            List<String> selectedRoles = promptKeys;
+            String questionToExperts = requestDTO.getQuestion();
+            
+            if (moderatorResponse != null) {
+                ModeratorResponseDTO decision = parseModerator(moderatorResponse.getMessage());
+                if (decision != null && decision.getRoleKey() != null && !decision.getRoleKey().isEmpty()) {
+                    selectedRoles = decision.getRoleKey();
+                    questionToExperts = decision.getMessages() != null ? decision.getMessages() : requestDTO.getQuestion();
+                    
+                    System.out.println("[파싱 성공]");
+                    System.out.println("선택된 역할: " + selectedRoles);
+                    System.out.println("전문가에게 할 질문: " + questionToExperts);
+                } else {
+                    System.out.println("[파싱 실패 - 기본값 사용]");
+                    System.out.println("기본 역할: " + promptKeys);
+                }
+            }
+            System.out.println("================================\n");
+
+            List<CompletableFuture<ChatEntity>> futures = new ArrayList<>();
+            for (String roleKey : selectedRoles) {
+                List<Map<String, String>> messages = buildMessages(roleKey, questionToExperts, allHistory);
+                CompletableFuture<ChatEntity> future = CompletableFuture
+                        .supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
+                        .orTimeout(45, TimeUnit.SECONDS)
+                        .exceptionally(ex -> null);
                 futures.add(future);
             }
 
             List<ChatEntity> roundAnswers = futures.stream()
-                    .map(java.util.concurrent.CompletableFuture::join)
-                    .filter(java.util.Objects::nonNull)
+                    .map(CompletableFuture::join)
+                    .filter(answer -> answer != null)
                     .toList();
 
             if (!roundAnswers.isEmpty()) {
                 chatRepository.saveAll(roundAnswers);
-                // 메모리 컨텍스트에도 즉시 반영 (불필요한 재조회 방지)
                 allHistory.addAll(roundAnswers);
-                isFirstTurn = false;
             }
         }
 
-        String summary = summarize(allHistory);
-        return new ChatResponseDTO(summary);
+        return new ChatResponseDTO(summarize(allHistory));
     }
 
-    private boolean isFirstTurn(List<ChatEntity> history) {
-        return history.stream().noneMatch(c -> !"user".equals(c.getSender()) && !"system".equals(c.getSender()));
-    }
+    private List<Map<String, String>> buildMessages(String roleKey, String userQuestion, List<ChatEntity> history) {
+        List<Map<String, String>> messages = new ArrayList<>();
 
-    private String buildSystemContent(String roleKey, boolean isFirstTurn) {
-        String base = promptLoader.getPrompt(roleKey);
-        String guide = promptLoader.getInstruction(isFirstTurn ? "initial_response" : "debate_response");
-        String safeBase = base == null ? "" : base;
-        String safeGuide = guide == null ? "" : guide;
-        return safeBase + (safeGuide.isEmpty() ? "" : "\n\n" + safeGuide);
-    }
+        // System 메시지
+        String systemContent = promptLoader.getPrompt(roleKey);
+        
+        // 사회자는 debate_response 지시사항을 붙이지 않음 (JSON 형식 유지를 위해)
+        if (systemContent != null) {
+            Map<String, String> system = new HashMap<>();
+            system.put("role", "system");
+            
+            if ("moderator".equals(roleKey)) {
+                // 사회자는 프롬프트만 사용
+                system.put("content", systemContent);
+            } else {
+                // 다른 역할들은 debate_response 지시사항 추가
+                String instruction = promptLoader.getInstruction("debate_response");
+                system.put("content", instruction != null ? systemContent + "\n\n" + instruction : systemContent);
+            }
+            messages.add(system);
+        }
 
-    private List<java.util.Map<String, String>> buildMessages(String systemContent, String userQuestion, List<ChatEntity> history, String currentRole, boolean isFirstTurn) {
-        List<java.util.Map<String, String>> messages = new ArrayList<>();
-
-        java.util.Map<String, String> system = new java.util.HashMap<>();
-        system.put("role", "system");
-        system.put("content", systemContent);
-        messages.add(system);
-
-        java.util.Map<String, String> user = new java.util.HashMap<>();
+        // User 메시지
+        Map<String, String> user = new HashMap<>();
         user.put("role", "user");
         user.put("content", userQuestion);
         messages.add(user);
 
-        if (!isFirstTurn) {
-            // 최근 사용자 이후의 다른 에이전트 응답들만 포함
-            int lastUserIdx = findLastUserIndex(history);
+        // 최근 다른 에이전트의 응답들 추가
+        int lastUserIdx = findLastUserIndex(history);
+        if (lastUserIdx >= 0) {
             for (int i = lastUserIdx + 1; i < history.size(); i++) {
                 ChatEntity chat = history.get(i);
-                String sender = chat.getSender();
-                if (!"user".equals(sender) && !"system".equals(sender) && !currentRole.equals(sender)) {
-                    java.util.Map<String, String> assistant = new java.util.HashMap<>();
+                if (!chat.getSender().equals(roleKey) && !chat.getSender().equals("user")) {
+                    Map<String, String> assistant = new HashMap<>();
                     assistant.put("role", "assistant");
                     assistant.put("content", chat.getMessage());
                     messages.add(assistant);
@@ -124,7 +168,7 @@ public class ChatService {
 
     private int findLastUserIndex(List<ChatEntity> history) {
         for (int i = history.size() - 1; i >= 0; i--) {
-            if ("user".equals(history.get(i).getSender())) {
+            if (history.get(i).getSender().equals("user")) {
                 return i;
             }
         }
@@ -134,22 +178,21 @@ public class ChatService {
     private String summarize(List<ChatEntity> history) {
         if (history.isEmpty()) return "요약할 대화 내용이 없습니다.";
 
-        String summarizer = promptLoader.getPrompt("summarizer");
-        if (summarizer == null) return "요약 프롬프트를 찾을 수 없습니다.";
+        String summarizerPrompt = promptLoader.getPrompt("summarizer");
+        if (summarizerPrompt == null) return "요약 프롬프트를 찾을 수 없습니다.";
 
-        List<java.util.Map<String, String>> messages = new ArrayList<>();
-        java.util.Map<String, String> system = new java.util.HashMap<>();
+        List<Map<String, String>> messages = new ArrayList<>();
+        Map<String, String> system = new HashMap<>();
         system.put("role", "system");
-        system.put("content", summarizer);
+        system.put("content", summarizerPrompt);
         messages.add(system);
 
         for (ChatEntity chat : history) {
-            java.util.Map<String, String> m = new java.util.HashMap<>();
-            String role = chat.getSender();
-            if (!"user".equals(role) && !"system".equals(role)) role = "assistant";
-            m.put("role", role);
-            m.put("content", chat.getMessage());
-            messages.add(m);
+            Map<String, String> msg = new HashMap<>();
+            String role = chat.getSender().equals("user") ? "user" : "assistant";
+            msg.put("role", role);
+            msg.put("content", chat.getMessage());
+            messages.add(msg);
         }
 
         ChatEntity summary = gptService.requestGpt(messages, "summarizer");
@@ -161,46 +204,25 @@ public class ChatService {
     }
 
     public ChatResponseDTO summarizeConversation() {
-        // 1. 전체 대화 기록을 가져옵니다.
         List<ChatEntity> chatHistory = chatRepository.findAll(Sort.by(Sort.Direction.ASC, "timestamp"));
-        if (chatHistory.isEmpty()) {
-            return new ChatResponseDTO("요약할 대화 내용이 없습니다.");
-        }
+        return new ChatResponseDTO(summarize(chatHistory));
+    }
 
-        // 2. 'summarizer' 프롬프트를 로드합니다.
-        String summarizerContent = promptLoader.getPrompt("summarizer");
-        if (summarizerContent == null) {
-            return new ChatResponseDTO("오류: Summarizer 프롬프트를 찾을 수 없습니다.");
-        }
-
-        // 3. GptService를 호출하여 요약을 요청합니다.
-        // system + history 로 메시지 구성
-        List<java.util.Map<String, String>> messages = new java.util.ArrayList<>();
-        java.util.Map<String, String> systemMessage = new java.util.HashMap<>();
-        systemMessage.put("role", "system");
-        systemMessage.put("content", summarizerContent);
-        messages.add(systemMessage);
-
-        for (ChatEntity chat : chatHistory) {
-            java.util.Map<String, String> msg = new java.util.HashMap<>();
-            String role = chat.getSender();
-            if (!role.equals("user") && !role.equals("system")) {
-                role = "assistant";
+    // 사회자 응답 JSON 파싱
+    private ModeratorResponseDTO parseModerator(String responseText) {
+        try {
+            // GPT가 ```json ... ``` 형태로 반환할 경우 추출
+            String jsonText = responseText.trim();
+            if (jsonText.contains("```json")) {
+                jsonText = jsonText.substring(jsonText.indexOf("```json") + 7, jsonText.lastIndexOf("```")).trim();
+            } else if (jsonText.contains("```")) {
+                jsonText = jsonText.substring(jsonText.indexOf("```") + 3, jsonText.lastIndexOf("```")).trim();
             }
-            msg.put("role", role);
-            msg.put("content", chat.getMessage());
-            messages.add(msg);
+            
+            return objectMapper.readValue(jsonText, ModeratorResponseDTO.class);
+        } catch (Exception e) {
+            System.err.println("사회자 응답 파싱 실패: " + e.getMessage());
+            return null;
         }
-
-        ChatEntity summary = gptService.requestGpt(messages, "summarizer");
-
-        // 4. (선택사항) 생성된 요약 내용을 DB에 저장합니다.
-        if (summary != null) {
-            chatRepository.save(summary);
-        }
-
-        // 5. 요약 결과를 DTO에 담아 반환합니다.
-        String summaryContent = (summary != null) ? summary.getMessage() : "요약 생성에 실패했습니다.";
-        return new ChatResponseDTO(summaryContent);
     }
 }

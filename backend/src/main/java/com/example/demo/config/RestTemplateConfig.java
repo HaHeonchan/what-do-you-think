@@ -1,3 +1,4 @@
+// RestTemplateConfig.java (수정됨)
 package com.example.demo.config;
 
 import org.springframework.context.annotation.Bean;

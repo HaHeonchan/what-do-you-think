@@ -13,7 +13,6 @@ import org.springframework.ai.chat.prompt.Prompt;
 
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,7 +25,6 @@ import java.util.stream.Collectors;
 public class GptService {
     private final OpenAiChatModel openAiChatModel;
 
-    @Autowired
     public GptService(OpenAiChatModel openAiChatModel) {
         this.openAiChatModel = openAiChatModel;
     }

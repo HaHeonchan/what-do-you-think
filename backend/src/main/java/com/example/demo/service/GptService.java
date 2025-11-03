@@ -43,18 +43,21 @@ public class GptService {
             {
               "type": "object",
               "properties": {
-                "roleKey": {
+                "request": {
                   "type": "array",
-                  "items": { "type": "string" },
-                  "description": "다음에 발언할 전문가의 역할 키 (예: ['critic', 'analyst'])"
-                },
-                "messages": {
-                  "type": "string",
-                  "description": "선택된 전문가들에게 전달할 1~3 문장의 짧은 질문",
-                  "maxLength": 200
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "roleKey": { "type": "string" },
+                      "messages": { "type": "string", "maxLength": 200 }
+                    },
+                    "required": ["roleKey", "messages"],
+                    "additionalProperties": false
+                  }
                 }
               },
-              "required": ["roleKey", "messages"],
+              "required": ["request"],
               "additionalProperties": false
             }
            """;

@@ -77,35 +77,48 @@ public class ChatService {
                 System.out.println("[사회자 응답 없음]");
             }
             
-            // 사회자 응답 파싱
-            List<String> selectedRoles = promptKeys;
-            String questionToExperts = requestDTO.getQuestion();
-            
+            // 사회자 응답 파싱 (request 배열 지원)
+            List<CompletableFuture<ChatEntity>> futures = new ArrayList<>();
             if (moderatorResponse != null) {
                 ModeratorResponseDTO decision = parseModerator(moderatorResponse.getMessage());
-                if (decision != null && decision.getRoleKey() != null && !decision.getRoleKey().isEmpty()) {
-                    selectedRoles = decision.getRoleKey();
-                    questionToExperts = decision.getMessages() != null ? decision.getMessages() : requestDTO.getQuestion();
-                    
-                    System.out.println("[파싱 성공]");
-                    System.out.println("선택된 역할: " + selectedRoles);
-                    System.out.println("전문가에게 할 질문: " + questionToExperts);
+                if (decision != null && decision.getRequest() != null && !decision.getRequest().isEmpty()) {
+                    System.out.println("[파싱 성공] 사회자 요청 수: " + decision.getRequest().size());
+                    decision.getRequest().stream()
+                            .filter(item -> {
+                                boolean allowed = promptKeys != null && promptKeys.contains(item.getRoleKey());
+                                if (!allowed) {
+                                    System.out.println("[필터링] 허용되지 않은 roleKey 제거: " + item.getRoleKey());
+                                }
+                                return allowed;
+                            })
+                            .forEach(item -> {
+                        String roleKey = item.getRoleKey();
+                        String questionToExperts = item.getMessages() != null ? item.getMessages() : requestDTO.getQuestion();
+                        List<Map<String, String>> messages = buildMessages(roleKey, questionToExperts, allHistory);
+                        CompletableFuture<ChatEntity> future = CompletableFuture
+                                .supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
+                                .orTimeout(45, TimeUnit.SECONDS)
+                                .exceptionally(ex -> null);
+                        futures.add(future);
+                    });
                 } else {
-                    System.out.println("[파싱 실패 - 기본값 사용]");
-                    System.out.println("기본 역할: " + promptKeys);
+                    System.out.println("[파싱 실패 - 기본 프롬프트 키 사용]");
                 }
             }
-            System.out.println("================================\n");
 
-            List<CompletableFuture<ChatEntity>> futures = new ArrayList<>();
-            for (String roleKey : selectedRoles) {
-                List<Map<String, String>> messages = buildMessages(roleKey, questionToExperts, allHistory);
-                CompletableFuture<ChatEntity> future = CompletableFuture
-                        .supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
-                        .orTimeout(45, TimeUnit.SECONDS)
-                        .exceptionally(ex -> null);
-                futures.add(future);
+            // 사회자 요청이 없거나 파싱 실패 시 기본 동작
+            if (futures.isEmpty()) {
+                for (String roleKey : promptKeys) {
+                    List<Map<String, String>> messages = buildMessages(roleKey, requestDTO.getQuestion(), allHistory);
+                    CompletableFuture<ChatEntity> future = CompletableFuture
+                            .supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
+                            .orTimeout(45, TimeUnit.SECONDS)
+                            .exceptionally(ex -> null);
+                    futures.add(future);
+                }
             }
+
+            System.out.println("================================\n");
 
             List<ChatEntity> roundAnswers = futures.stream()
                     .map(CompletableFuture::join)

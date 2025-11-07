@@ -1,0 +1,11 @@
+build
+bin
+.gradle
+.git
+.gitignore
+README.md
+HELP.md
+*.log
+.DS_Store
+src/test
+

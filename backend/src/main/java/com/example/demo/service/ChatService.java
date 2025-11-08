@@ -81,11 +81,13 @@ public class ChatService {
                 .build();
         chatRepository.save(userMessage);
 
-        // 프롬프트 키 검증
+        // 프롬프트 키 검증 및 기본값 설정
         List<String> promptKeys = requestDTO.getPromptKeys();
         if (promptKeys == null || promptKeys.isEmpty()) {
-            return new ChatResponseDTO("프롬프트 키가 없습니다.");
+            // 기본 역할: creator, critic, analyst, optimizer
+            promptKeys = List.of("creator", "critic", "analyst", "optimizer");
         }
+        final List<String> finalPromptKeys = promptKeys;
 
         // 해당 대화방의 대화 히스토리 로드
         List<ChatEntity> allHistory = chatRepository.findByChatRoomOrderByTimestampAsc(chatRoom);
@@ -126,7 +128,7 @@ public class ChatService {
                     System.out.println("[파싱 성공] 사회자 요청 수: " + decision.getRequest().size());
                     decision.getRequest().stream()
                             .filter(item -> {
-                                boolean allowed = promptKeys != null && promptKeys.contains(item.getRoleKey());
+                                boolean allowed = finalPromptKeys != null && finalPromptKeys.contains(item.getRoleKey());
                                 if (!allowed) {
                                     System.out.println("[필터링] 허용되지 않은 roleKey 제거: " + item.getRoleKey());
                                 }
@@ -149,7 +151,7 @@ public class ChatService {
 
             // 사회자 요청이 없거나 파싱 실패 시 기본 동작
             if (futures.isEmpty()) {
-                for (String roleKey : promptKeys) {
+                for (String roleKey : finalPromptKeys) {
                     List<Map<String, String>> messages = buildMessages(roleKey, requestDTO.getQuestion(), allHistory, null);
                     CompletableFuture<ChatEntity> future = CompletableFuture
                             .supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)

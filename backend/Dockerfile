@@ -24,6 +24,10 @@ WORKDIR /app
 # 빌드된 JAR 파일 복사
 COPY --from=builder /app/build/libs/*.jar app.jar
 
+# .env 파일 복사 (선택적, 없어도 됨)
+# Docker Compose에서 환경 변수로 전달되므로 주석 처리
+# COPY .env .env
+
 # 포트 노출
 EXPOSE 8080
 

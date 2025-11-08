@@ -6,11 +6,15 @@ services:
     container_name: what-do-you-think-backend
     ports:
       - "8080:8080"
+    env_file:
+      - .env  # 프로젝트 루트의 .env 파일 사용
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
       - SPRING_PROFILES_ACTIVE=prod
     volumes:
       - ./backend/src/main/resources/prompts:/app/prompts:ro
+      - ./.env:/app/.env:ro  # .env 파일을 컨테이너에 마운트
     networks:
       - app-network
 

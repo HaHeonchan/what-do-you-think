@@ -16,14 +16,32 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
     
-    @Value("${jwt.secret:your-secret-key-change-this-in-production-minimum-256-bits}")
+    @Value("${jwt.secret}")
     private String secret;
     
     @Value("${jwt.expiration:86400000}") // 24시간 (밀리초)
     private Long expiration;
 
     private SecretKey getSigningKey() {
+        // JWT_SECRET이 환경 변수에서 설정되지 않았는지 확인
+        if (secret == null || secret.isEmpty() || secret.startsWith("${")) {
+            throw new IllegalStateException(
+                "JWT_SECRET environment variable is required. " +
+                "Please set JWT_SECRET in your .env file or as an environment variable with at least 32 characters."
+            );
+        }
+        
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        
+        // JWT HMAC-SHA 알고리즘은 최소 256비트(32바이트) 키가 필요
+        if (keyBytes.length < 32) {
+            throw new IllegalArgumentException(
+                "JWT secret key must be at least 256 bits (32 bytes). " +
+                "Current key length: " + keyBytes.length + " bytes. " +
+                "Please set JWT_SECRET environment variable or in .env file with at least 32 characters."
+            );
+        }
+        
         return Keys.hmacShaKeyFor(keyBytes);
     }
 

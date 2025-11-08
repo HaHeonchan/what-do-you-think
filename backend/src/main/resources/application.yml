@@ -27,3 +27,8 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+
+# JWT 설정
+jwt:
+  secret: ${JWT_SECRET:your-secret-key-change-this-in-production-minimum-256-bits-required-for-hmac-sha-256-algorithm}
+  expiration: 86400000 # 24시간 (밀리초)

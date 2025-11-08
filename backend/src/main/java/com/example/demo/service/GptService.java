@@ -97,17 +97,25 @@ public class GptService {
             return createErrorEntity(senderRole);
         }
 
-        // 6. 응답 파싱 (이하 동일)
+        // 6. 응답 파싱 및 토큰 사용량 추출
         ChatEntity assistantMessage = null;
         String answer = "오류: 답변을 받아올 수 없습니다.";
+        Long tokensUsed = 0L;
 
         if (response != null && response.getResult() != null) {
             answer = response.getResult().getOutput().getText();
+            
+            // 토큰 사용량 추출
+            if (response.getMetadata() != null && response.getMetadata().getUsage() != null) {
+                var usage = response.getMetadata().getUsage();
+                tokensUsed = usage.getTotalTokens() != null ? usage.getTotalTokens() : 0L;
+            }
 
             assistantMessage = ChatEntity.builder()
                     .message(answer)
                     .sender(senderRole)
                     .timestamp(Instant.now().toString())
+                    .tokensUsed(tokensUsed)
                     .build();
             System.out.println("ok");
         } else {

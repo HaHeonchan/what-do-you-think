@@ -1,10 +1,7 @@
 import { useState, useEffect } from "react"
-import { useParams, useNavigate } from "react-router-dom"
 import { chatRoomAPI, gptAPI } from "../services/api"
 
-const ChatRoomDetail = () => {
-  const { id } = useParams()
-  const navigate = useNavigate()
+const ChatRoomDetailPanel = ({ roomId }) => {
   const [chatRoom, setChatRoom] = useState(null)
   const [history, setHistory] = useState([])
   const [statistics, setStatistics] = useState(null)
@@ -13,9 +10,9 @@ const ChatRoomDetail = () => {
   const [conversationRounds, setConversationRounds] = useState(1)
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
+  const [pageLoading, setPageLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("chat")
 
-  // 사용 가능한 역할 목록
   const availableRoles = [
     { key: "creator", label: "창의적 아이디어 제시자", emoji: "💡" },
     { key: "critic", label: "비판적 분석가", emoji: "🔍" },
@@ -26,7 +23,6 @@ const ChatRoomDetail = () => {
   const handleRoleToggle = (roleKey) => {
     setPromptKeys((prev) => {
       if (prev.includes(roleKey)) {
-        // 최소 1개는 선택되어야 함
         if (prev.length === 1) return prev
         return prev.filter((key) => key !== roleKey)
       } else {
@@ -36,25 +32,32 @@ const ChatRoomDetail = () => {
   }
 
   useEffect(() => {
-    loadChatRoom()
-    loadHistory()
-    loadStatistics()
-  }, [id])
+    if (roomId) {
+      setPageLoading(true)
+      setActiveTab("chat")
+      Promise.all([
+        loadChatRoom(),
+        loadHistory(),
+        loadStatistics()
+      ]).finally(() => {
+        setPageLoading(false)
+      })
+    }
+  }, [roomId])
 
   const loadChatRoom = async () => {
     try {
-      const res = await chatRoomAPI.getById(id)
+      const res = await chatRoomAPI.getById(roomId)
       setChatRoom(res.data)
       setNote(res.data.note || "")
     } catch (err) {
-      alert("대화방을 불러오는데 실패했습니다.")
-      navigate("/chat-rooms")
+      console.error("대화방 로드 실패:", err)
     }
   }
 
   const loadHistory = async () => {
     try {
-      const res = await chatRoomAPI.getHistory(id)
+      const res = await chatRoomAPI.getHistory(roomId)
       setHistory(res.data)
     } catch (err) {
       console.error("대화 기록 로드 실패:", err)
@@ -63,7 +66,7 @@ const ChatRoomDetail = () => {
 
   const loadStatistics = async () => {
     try {
-      const res = await chatRoomAPI.getStatistics(id)
+      const res = await chatRoomAPI.getStatistics(roomId)
       setStatistics(res.data)
     } catch (err) {
       console.error("통계 로드 실패:", err)
@@ -77,13 +80,12 @@ const ChatRoomDetail = () => {
     setLoading(true)
     try {
       await gptAPI.sendQuestion({
-        chatRoomId: Number.parseInt(id),
+        chatRoomId: Number.parseInt(roomId),
         question,
         promptKeys,
         conversationRounds,
       })
       setQuestion("")
-      await loadChatRoom()
       await loadHistory()
       await loadStatistics()
     } catch (err) {
@@ -95,23 +97,21 @@ const ChatRoomDetail = () => {
 
   const handleSaveNote = async () => {
     try {
-      await chatRoomAPI.updateNote(id, { note })
+      await chatRoomAPI.updateNote(roomId, { note })
       alert("노트가 저장되었습니다.")
+      setChatRoom(prev => ({...prev, note}))
     } catch (err) {
       alert("노트 저장에 실패했습니다.")
     }
   }
 
-  if (!chatRoom) {
+  if (pageLoading || !chatRoom) {
     return <div style={styles.center}>로딩 중...</div>
   }
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <button onClick={() => navigate("/chat-rooms")} style={styles.backBtn}>
-          ← 돌아가기
-        </button>
         <h1 style={styles.title}>{chatRoom.title || "대화방"}</h1>
       </div>
 
@@ -208,7 +208,6 @@ const ChatRoomDetail = () => {
             onChange={(e) => setNote(e.target.value)}
             placeholder="노트를 작성하세요..."
             style={styles.noteTextarea}
-            rows={20}
           />
           <button onClick={handleSaveNote} style={styles.saveBtn}>
             저장
@@ -258,29 +257,22 @@ const ChatRoomDetail = () => {
 
 const styles = {
   container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    padding: "40px 20px",
+    flex: 1,
+    height: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    backgroundColor: "#374151", // gray-700
+    padding: "20px",
+    overflow: "hidden",
   },
   header: {
     display: "flex",
     alignItems: "center",
     gap: "20px",
-    marginBottom: "30px",
-  },
-  backBtn: {
-    padding: "8px 16px",
-    backgroundColor: "rgba(107, 114, 128, 0.2)",
-    color: "#b0b0b0",
-    border: "1px solid rgba(107, 114, 128, 0.3)",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "13px",
-    fontWeight: "600",
-    transition: "all 0.3s ease",
+    marginBottom: "20px",
   },
   title: {
-    fontSize: "28px",
+    fontSize: "24px",
     fontWeight: "700",
     color: "#ffffff",
     margin: 0,
@@ -288,7 +280,7 @@ const styles = {
   tabs: {
     display: "flex",
     gap: "10px",
-    marginBottom: "30px",
+    marginBottom: "20px",
     borderBottom: "1px solid rgba(59, 130, 246, 0.1)",
     paddingBottom: "0",
   },
@@ -298,7 +290,7 @@ const styles = {
     border: "none",
     cursor: "pointer",
     borderBottom: "2px solid transparent",
-    color: "#808080",
+    color: "#d1d5db", // gray-300
     fontSize: "14px",
     fontWeight: "600",
     transition: "all 0.3s ease",
@@ -310,8 +302,9 @@ const styles = {
   chatContainer: {
     display: "flex",
     flexDirection: "column",
-    height: "70vh",
+    flex: 1,
     gap: "20px",
+    overflow: "hidden",
   },
   history: {
     flex: 1,
@@ -344,6 +337,7 @@ const styles = {
   messageText: {
     color: "#e0e0e0",
     marginLeft: "8px",
+    whiteSpace: "pre-wrap",
   },
   form: {
     display: "flex",
@@ -371,7 +365,7 @@ const styles = {
   },
   sendBtn: {
     padding: "12px 24px",
-    backgroundColor: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+    background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
     color: "white",
     border: "none",
     borderRadius: "8px",
@@ -379,7 +373,6 @@ const styles = {
     fontSize: "14px",
     fontWeight: "600",
     transition: "all 0.3s ease",
-    background: "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
   },
   optionsContainer: {
     display: "flex",
@@ -451,8 +444,11 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "16px",
+    flex: 1,
+    overflow: "hidden",
   },
   noteTextarea: {
+    flex: 1,
     width: "100%",
     padding: "16px",
     border: "1px solid rgba(59, 130, 246, 0.3)",
@@ -462,11 +458,11 @@ const styles = {
     backgroundColor: "rgba(26, 31, 46, 0.6)",
     color: "#e0e0e0",
     outline: "none",
-    resize: "vertical",
+    resize: "none",
   },
   saveBtn: {
     padding: "12px 24px",
-    backgroundColor: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+    background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
     color: "white",
     border: "none",
     borderRadius: "8px",
@@ -475,12 +471,13 @@ const styles = {
     fontSize: "14px",
     fontWeight: "600",
     transition: "all 0.3s ease",
-    background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
   },
   statsContainer: {
     display: "flex",
     flexDirection: "column",
     gap: "24px",
+    flex: 1,
+    overflowY: "auto",
   },
   statGrid: {
     display: "grid",
@@ -541,7 +538,14 @@ const styles = {
   center: {
     textAlign: "center",
     padding: "40px",
+    color: "#d1d5db",
+    fontSize: "16px",
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
 }
 
-export default ChatRoomDetail
+export default ChatRoomDetailPanel
+

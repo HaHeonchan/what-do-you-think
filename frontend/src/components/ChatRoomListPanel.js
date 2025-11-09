@@ -2,9 +2,10 @@ import { useState, useEffect } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { chatRoomAPI } from "../services/api"
 
-const ChatRoomListPanel = ({ onRoomSelect, selectedRoomId, onCreateRoom }) => {
+const ChatRoomListPanel = ({ onRoomSelect, selectedRoomId }) => {
   const [chatRooms, setChatRooms] = useState([])
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
   const [error, setError] = useState("")
   const { user, logout } = useAuth()
 
@@ -23,6 +24,28 @@ const ChatRoomListPanel = ({ onRoomSelect, selectedRoomId, onCreateRoom }) => {
     }
   }
 
+  const handleCreateRoom = async () => {
+    setCreating(true)
+    setError("")
+    try {
+      // 빈 대화방 생성
+      const res = await chatRoomAPI.create({ title: null })
+      const newRoom = res.data
+      
+      // 목록 새로고침
+      await loadChatRooms()
+      
+      // 새로 생성된 대화방 선택
+      if (onRoomSelect) {
+        onRoomSelect(newRoom.id)
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || "대화방 생성에 실패했습니다.")
+    } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -32,8 +55,15 @@ const ChatRoomListPanel = ({ onRoomSelect, selectedRoomId, onCreateRoom }) => {
             로그아웃
           </button>
         </div>
-        <button onClick={onCreateRoom} style={styles.createBtn}>
-          + 새 대화방
+        <button 
+          onClick={handleCreateRoom} 
+          disabled={creating}
+          style={{
+            ...styles.createBtn,
+            ...(creating ? styles.createBtnDisabled : {}),
+          }}
+        >
+          {creating ? "생성 중..." : "+ 새 대화방"}
         </button>
       </div>
 
@@ -123,6 +153,11 @@ const styles = {
     cursor: "pointer",
     border: "none",
     transition: "background-color 0.2s",
+  },
+  createBtnDisabled: {
+    backgroundColor: "#1e40af", // blue-800
+    cursor: "not-allowed",
+    opacity: 0.7,
   },
   error: {
     padding: "16px",

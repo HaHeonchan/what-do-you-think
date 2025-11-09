@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { chatRoomAPI, gptAPI } from "../services/api"
+import { FileText, MessageSquare, BarChart3, Lightbulb, Search, Zap } from "lucide-react"
 
 const ChatRoomDetailPanel = ({ roomId }) => {
   const [chatRoom, setChatRoom] = useState(null)
@@ -11,13 +12,13 @@ const ChatRoomDetailPanel = ({ roomId }) => {
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState("chat")
+  const [activeTab, setActiveTab] = useState("note")
 
   const availableRoles = [
-    { key: "creator", label: "창의적 아이디어 제시자", emoji: "💡" },
-    { key: "critic", label: "비판적 분석가", emoji: "🔍" },
-    { key: "analyst", label: "객관적 분석가", emoji: "📊" },
-    { key: "optimizer", label: "최적화 전문가", emoji: "⚡" },
+    { key: "creator", label: "창의적 아이디어 제시자", icon: Lightbulb, color: "#fbbf24" },
+    { key: "critic", label: "비판적 분석가", icon: Search, color: "#60a5fa" },
+    { key: "analyst", label: "객관적 분석가", icon: BarChart3, color: "#34d399" },
+    { key: "optimizer", label: "최적화 전문가", icon: Zap, color: "#f97316" },
   ]
 
   const handleRoleToggle = (roleKey) => {
@@ -34,7 +35,7 @@ const ChatRoomDetailPanel = ({ roomId }) => {
   useEffect(() => {
     if (roomId) {
       setPageLoading(true)
-      setActiveTab("chat")
+      setActiveTab("note")
       Promise.all([
         loadChatRoom(),
         loadHistory(),
@@ -79,15 +80,27 @@ const ChatRoomDetailPanel = ({ roomId }) => {
 
     setLoading(true)
     try {
-      await gptAPI.sendQuestion({
+      // 질문 전송 및 응답 받기 (응답에는 업데이트된 노트 내용이 포함됨)
+      const response = await gptAPI.sendQuestion({
         chatRoomId: Number.parseInt(roomId),
         question,
         promptKeys,
         conversationRounds,
       })
+      
+      // 응답으로 받은 요약 내용으로 노트 업데이트
+      if (response.data && response.data.message) {
+        setNote(response.data.message)
+      }
+      
       setQuestion("")
-      await loadHistory()
-      await loadStatistics()
+      
+      // 대화 기록과 통계 새로고침
+      await Promise.all([
+        loadChatRoom(),
+        loadHistory(),
+        loadStatistics()
+      ])
     } catch (err) {
       alert(err.response?.data?.error || "질문 전송에 실패했습니다.")
     } finally {
@@ -116,26 +129,37 @@ const ChatRoomDetailPanel = ({ roomId }) => {
       </div>
 
       <div style={styles.tabs}>
-        {["chat", "note", "stats"].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            style={{
-              ...styles.tab,
-              ...(activeTab === tab && styles.tabActive),
-            }}
-          >
-            {tab === "chat" && "💬 대화"}
-            {tab === "note" && "📝 노트"}
-            {tab === "stats" && "📊 통계"}
-          </button>
-        ))}
+        {[
+          { key: "note", label: "노트", icon: FileText },
+          { key: "chat", label: "대화", icon: MessageSquare },
+          { key: "stats", label: "통계", icon: BarChart3 },
+        ].map((tab) => {
+          const Icon = tab.icon
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                ...styles.tab,
+                ...(activeTab === tab.key && styles.tabActive),
+              }}
+            >
+              <Icon size={18} style={{ marginRight: "8px" }} />
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {activeTab === "chat" && (
         <div style={styles.chatContainer}>
           <div style={styles.history}>
-            {history.length === 0 ? (
+            {loading ? (
+              <div style={styles.loadingOverlay}>
+                <div style={styles.loadingSpinner}></div>
+                <p style={styles.loadingText}>응답을 생성하고 있습니다...</p>
+              </div>
+            ) : history.length === 0 ? (
               <div style={styles.emptyHistory}>
                 <p>아직 대화가 없습니다</p>
                 <p style={styles.emptyHistorySubtext}>질문을 입력하여 시작하세요</p>
@@ -168,19 +192,23 @@ const ChatRoomDetailPanel = ({ roomId }) => {
               <div style={styles.roleSelection}>
                 <div style={styles.roleSelectionLabel}>역할 선택:</div>
                 <div style={styles.roleCheckboxes}>
-                  {availableRoles.map((role) => (
-                    <label key={role.key} style={styles.roleCheckbox}>
-                      <input
-                        type="checkbox"
-                        checked={promptKeys.includes(role.key)}
-                        onChange={() => handleRoleToggle(role.key)}
-                        style={styles.checkbox}
-                      />
-                      <span style={styles.roleLabel}>
-                        {role.emoji} {role.label}
-                      </span>
-                    </label>
-                  ))}
+                  {availableRoles.map((role) => {
+                    const Icon = role.icon
+                    return (
+                      <label key={role.key} style={styles.roleCheckbox}>
+                        <input
+                          type="checkbox"
+                          checked={promptKeys.includes(role.key)}
+                          onChange={() => handleRoleToggle(role.key)}
+                          style={styles.checkbox}
+                        />
+                        <span style={styles.roleLabel}>
+                          <Icon size={16} color={role.color} style={{ marginRight: "6px" }} />
+                          {role.label}
+                        </span>
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
               <div style={styles.options}>
@@ -203,15 +231,81 @@ const ChatRoomDetailPanel = ({ roomId }) => {
 
       {activeTab === "note" && (
         <div style={styles.noteContainer}>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="노트를 작성하세요..."
-            style={styles.noteTextarea}
-          />
-          <button onClick={handleSaveNote} style={styles.saveBtn}>
-            저장
-          </button>
+          <div style={styles.noteContent}>
+            {loading ? (
+              <div style={styles.noteLoadingOverlay}>
+                <div style={styles.loadingSpinner}></div>
+                <p style={styles.loadingText}>노트를 업데이트하고 있습니다...</p>
+              </div>
+            ) : (
+              <>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="노트를 작성하세요..."
+                  style={styles.noteTextarea}
+                />
+                <button onClick={handleSaveNote} style={styles.saveBtn}>
+                  저장
+                </button>
+              </>
+            )}
+          </div>
+          
+          <div style={styles.questionSection}>
+            <form onSubmit={handleSendQuestion} style={styles.form}>
+              <div style={styles.formRow}>
+                <input
+                  type="text"
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  placeholder="질문을 입력하세요..."
+                  style={styles.input}
+                  disabled={loading}
+                />
+                <button type="submit" disabled={loading} style={styles.sendBtn}>
+                  {loading ? "전송 중..." : "전송"}
+                </button>
+              </div>
+              <div style={styles.optionsContainer}>
+                <div style={styles.roleSelection}>
+                  <div style={styles.roleSelectionLabel}>역할 선택:</div>
+                  <div style={styles.roleCheckboxes}>
+                    {availableRoles.map((role) => {
+                      const Icon = role.icon
+                      return (
+                        <label key={role.key} style={styles.roleCheckbox}>
+                          <input
+                            type="checkbox"
+                            checked={promptKeys.includes(role.key)}
+                            onChange={() => handleRoleToggle(role.key)}
+                            style={styles.checkbox}
+                          />
+                          <span style={styles.roleLabel}>
+                            <Icon size={16} color={role.color} style={{ marginRight: "6px" }} />
+                            {role.label}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div style={styles.options}>
+                  <label style={styles.optionLabel}>
+                    라운드 수:
+                    <input
+                      type="number"
+                      value={conversationRounds}
+                      onChange={(e) => setConversationRounds(Number.parseInt(e.target.value))}
+                      min="1"
+                      max="5"
+                      style={styles.numberInput}
+                    />
+                  </label>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -294,6 +388,8 @@ const styles = {
     fontSize: "14px",
     fontWeight: "600",
     transition: "all 0.3s ease",
+    display: "flex",
+    alignItems: "center",
   },
   tabActive: {
     borderBottomColor: "#3b82f6",
@@ -418,6 +514,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "6px",
+    flex: 1,
   },
   options: {
     display: "flex",
@@ -443,6 +540,13 @@ const styles = {
   noteContainer: {
     display: "flex",
     flexDirection: "column",
+    gap: "20px",
+    flex: 1,
+    overflow: "hidden",
+  },
+  noteContent: {
+    display: "flex",
+    flexDirection: "column",
     gap: "16px",
     flex: 1,
     overflow: "hidden",
@@ -459,6 +563,10 @@ const styles = {
     color: "#e0e0e0",
     outline: "none",
     resize: "none",
+    minHeight: "200px",
+  },
+  questionSection: {
+    marginTop: "auto",
   },
   saveBtn: {
     padding: "12px 24px",
@@ -544,6 +652,37 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+  },
+  loadingOverlay: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "60px 20px",
+    color: "#d1d5db",
+  },
+  noteLoadingOverlay: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+    padding: "60px 20px",
+    color: "#d1d5db",
+  },
+  loadingSpinner: {
+    width: "48px",
+    height: "48px",
+    border: "4px solid rgba(59, 130, 246, 0.2)",
+    borderTop: "4px solid #3b82f6",
+    borderRadius: "50%",
+    animation: "spin 1s linear infinite",
+    marginBottom: "16px",
+  },
+  loadingText: {
+    fontSize: "14px",
+    color: "#9ca3af",
+    margin: 0,
   },
 }
 

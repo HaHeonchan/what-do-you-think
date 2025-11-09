@@ -1,28 +1,13 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
 import Sidebar from "../components/Sidebar"
 import ChatRoomListPanel from "../components/ChatRoomListPanel"
 import ChatRoomDetailPanel from "../components/ChatRoomDetailPanel"
-import CreateChatRoom from "./CreateChatRoom"
 
 const MainLayout = () => {
   const [selectedRoomId, setSelectedRoomId] = useState(null)
-  const [showCreateRoom, setShowCreateRoom] = useState(false)
-  const navigate = useNavigate()
 
   const handleRoomSelect = (roomId) => {
     setSelectedRoomId(roomId)
-    setShowCreateRoom(false)
-  }
-
-  const handleCreateRoom = () => {
-    setShowCreateRoom(true)
-    setSelectedRoomId(null)
-  }
-
-  const handleBackToList = () => {
-    setShowCreateRoom(false)
-    setSelectedRoomId(null)
   }
 
   return (
@@ -31,21 +16,9 @@ const MainLayout = () => {
       <ChatRoomListPanel
         onRoomSelect={handleRoomSelect}
         selectedRoomId={selectedRoomId}
-        onCreateRoom={handleCreateRoom}
       />
       <div style={styles.detailArea}>
-        {showCreateRoom ? (
-          <div style={styles.createRoomWrapper}>
-            <CreateChatRoom onSuccess={(roomId) => {
-              if (roomId) {
-                setShowCreateRoom(false)
-                setSelectedRoomId(roomId)
-              } else {
-                setShowCreateRoom(false)
-              }
-            }} />
-          </div>
-        ) : selectedRoomId ? (
+        {selectedRoomId ? (
           <ChatRoomDetailPanel key={selectedRoomId} roomId={selectedRoomId} />
         ) : (
           <div style={styles.emptyState}>
@@ -73,13 +46,6 @@ const styles = {
     flex: 1,
     height: "100vh",
     overflow: "hidden",
-  },
-  createRoomWrapper: {
-    height: "100%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
   },
   emptyState: {
     flex: 1,

@@ -1,6 +1,10 @@
 package com.example.demo.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -15,5 +19,15 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedHeaders("*") // 4. 허용할 HTTP 요청 헤더를 지정합니다. "*"는 모든 헤더를 의미합니다.
                 .allowCredentials(true) // 5. 쿠키를 포함한 요청을 허용할지 여부를 설정합니다.
                 .maxAge(3600); // 6. Pre-flight 요청의 결과를 캐시할 시간을 초 단위로 설정합니다.
+    }
+    
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+    
+    @Bean
+    public ObjectMapper objectMapper(Jackson2ObjectMapperBuilder builder) {
+        return builder.build();
     }
 }

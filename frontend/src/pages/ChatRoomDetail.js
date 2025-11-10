@@ -21,6 +21,7 @@ const ChatRoomDetail = () => {
     { key: "critic", label: "비판적 분석가", emoji: "🔍" },
     { key: "analyst", label: "객관적 분석가", emoji: "📊" },
     { key: "optimizer", label: "최적화 전문가", emoji: "⚡" },
+    { key: "researcher", label: "웹 검색 연구 전문가", emoji: "🌐" },
   ]
 
   const handleRoleToggle = (roleKey) => {

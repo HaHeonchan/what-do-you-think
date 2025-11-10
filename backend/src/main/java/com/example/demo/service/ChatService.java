@@ -32,10 +32,11 @@ public class ChatService {
     private final PromptLoader promptLoader;
     private final Executor gptExecutor;
     private final ObjectMapper objectMapper;
+    private final GoogleCustomSearchService googleCustomSearchService;
 
     public ChatService(ChatRepository chatRepository, ChatRoomRepository chatRoomRepository,
                       MemberRepository memberRepository, GptService gptService, PromptLoader promptLoader, 
-                      Executor gptExecutor, ObjectMapper objectMapper) {
+                      Executor gptExecutor, ObjectMapper objectMapper, GoogleCustomSearchService googleCustomSearchService) {
         this.chatRepository = chatRepository;
         this.chatRoomRepository = chatRoomRepository;
         this.memberRepository = memberRepository;
@@ -43,6 +44,7 @@ public class ChatService {
         this.promptLoader = promptLoader;
         this.gptExecutor = gptExecutor;
         this.objectMapper = objectMapper;
+        this.googleCustomSearchService = googleCustomSearchService;
     }
 
     @Transactional
@@ -238,7 +240,44 @@ public class ChatService {
         // User 메시지
         Map<String, String> user = new HashMap<>();
         user.put("role", "user");
-        user.put("content", userQuestion);
+        
+        // researcher 역할일 때 모더레이터가 제안한 검색어로 웹 검색 수행
+        if ("researcher".equals(roleKey)) {
+            System.out.println("\n[Researcher 역할 활성화] 웹 검색을 수행합니다.");
+            
+            // userQuestion은 모더레이터가 제안한 단일 검색어
+            String searchQuery = userQuestion.trim();
+            
+            if (searchQuery.isEmpty()) {
+                System.out.println("[경고] 모더레이터가 검색어를 제안하지 않았습니다. 원본 질문을 사용합니다.");
+                // 히스토리에서 원본 사용자 질문 찾기
+                String originalQuestion = history.stream()
+                    .filter(chat -> "user".equals(chat.getSender()))
+                    .reduce((first, second) -> second)
+                    .map(ChatEntity::getMessage)
+                    .orElse(searchQuery);
+                searchQuery = originalQuestion;
+            }
+            
+            System.out.println("[모더레이터 제안 검색어] " + searchQuery);
+            
+            try {
+                // 웹 검색 수행 (5개 결과 요청)
+                String searchResults = googleCustomSearchService.formatSearchResults(searchQuery, 5);
+                
+                // 검색 결과를 Researcher 에이전트에게 전달
+                user.put("content", "다음 검색어로 웹 검색이 수행되었습니다: " + searchQuery + "\n\n" + searchResults);
+                System.out.println("[Researcher] 검색 결과를 GPT 프롬프트에 포함했습니다.");
+            } catch (Exception e) {
+                System.err.println("[Researcher 검색 실패] " + e.getMessage());
+                e.printStackTrace();
+                // 검색 실패 시 검색어만 전달
+                user.put("content", "다음 검색어로 웹 검색을 수행해주세요: " + searchQuery + "\n\n(검색 결과를 가져오는 중 오류가 발생했습니다.)");
+            }
+        } else {
+            user.put("content", userQuestion);
+        }
+        
         messages.add(user);
 
         // 최근 다른 에이전트의 응답들 추가

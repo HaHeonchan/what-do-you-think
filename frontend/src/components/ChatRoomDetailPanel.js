@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { chatRoomAPI, gptAPI } from "../services/api"
-import { FileText, MessageSquare, BarChart3, Lightbulb, Search, Zap } from "lucide-react"
+import { FileText, MessageSquare, BarChart3, Lightbulb, Search, Zap, Globe } from "lucide-react"
 
 const ChatRoomDetailPanel = ({ roomId }) => {
   const [chatRoom, setChatRoom] = useState(null)
@@ -19,6 +19,7 @@ const ChatRoomDetailPanel = ({ roomId }) => {
     { key: "critic", label: "비판적 분석가", icon: Search, color: "#60a5fa" },
     { key: "analyst", label: "객관적 분석가", icon: BarChart3, color: "#34d399" },
     { key: "optimizer", label: "최적화 전문가", icon: Zap, color: "#f97316" },
+    { key: "researcher", label: "웹 검색 연구 전문가", icon: Globe, color: "#8b5cf6" },
   ]
 
   const handleRoleToggle = (roleKey) => {

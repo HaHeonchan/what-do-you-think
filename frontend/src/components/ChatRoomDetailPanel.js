@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
 import { chatRoomAPI, gptAPI } from "../services/api"
-import { FileText, MessageSquare, BarChart3, Lightbulb, Search, Zap, Globe, Edit2, Check, X } from "lucide-react"
+import { FileText, MessageSquare, BarChart3, Lightbulb, Search, Zap, Globe, Edit2, Check, X, Trash2 } from "lucide-react"
 import { formatModeratorMessage } from "../utils/moderatorFormatter"
+import { useChatProcessing } from "../contexts/ChatProcessingContext"
 
-const ChatRoomDetailPanel = ({ roomId }) => {
+const ChatRoomDetailPanel = ({ roomId, onRoomDeleted }) => {
   const [chatRoom, setChatRoom] = useState(null)
   const [history, setHistory] = useState([])
   const [statistics, setStatistics] = useState(null)
@@ -16,6 +17,8 @@ const ChatRoomDetailPanel = ({ roomId }) => {
   const [activeTab, setActiveTab] = useState("note")
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editingTitle, setEditingTitle] = useState("")
+  const { isProcessing, setIsProcessing } = useChatProcessing() // 전역 처리 상태
+  const [roomProcessing, setRoomProcessing] = useState(false) // 현재 채팅방이 처리 중인지
 
   const availableRoles = [
     { key: "creator", label: "생성자", icon: Lightbulb, color: "#fbbf24" },
@@ -43,11 +46,64 @@ const ChatRoomDetailPanel = ({ roomId }) => {
         loadChatRoom(),
         loadHistory(),
         loadStatistics()
-      ]).finally(() => {
+      ]).then(() => {
+        // 채팅방 로드 후 처리 상태 확인
+        checkRoomProcessingStatus()
+      }).finally(() => {
         setPageLoading(false)
       })
     }
   }, [roomId])
+
+  // 현재 채팅방의 처리 상태 확인
+  const checkRoomProcessingStatus = async () => {
+    if (!roomId) return
+    try {
+      const roomRes = await chatRoomAPI.getById(roomId)
+      const room = roomRes.data
+      setRoomProcessing(room.isProcessing === true)
+    } catch (err) {
+      console.error("채팅방 처리 상태 확인 실패:", err)
+      setRoomProcessing(false)
+    }
+  }
+
+  // 전역 처리 중일 때 주기적으로 상태 확인 (모든 채팅방에서 확인)
+  useEffect(() => {
+    if (!isProcessing) return
+
+    const interval = setInterval(async () => {
+      try {
+        // 현재 채팅방의 처리 상태 확인
+        if (roomId) {
+          const roomRes = await chatRoomAPI.getById(roomId)
+          const room = roomRes.data
+          
+          // DB의 isProcessing 필드를 확인
+          const isRoomProcessing = room.isProcessing === true
+          setRoomProcessing(isRoomProcessing)
+          
+          if (!isRoomProcessing) {
+            // 현재 채팅방이 처리 완료되었지만, 다른 채팅방이 처리 중일 수 있으므로
+            // 모든 채팅방을 확인해야 하지만, 일단 현재 채팅방만 확인
+            // 전역 상태는 다른 채팅방에서도 확인하므로 여기서는 false로 설정
+            setIsProcessing(false)
+            // 데이터 새로고침
+            loadHistory()
+            loadChatRoom()
+            loadStatistics()
+          } else {
+            // 아직 처리 중 - 히스토리만 업데이트
+            loadHistory()
+          }
+        }
+      } catch (err) {
+        console.error("처리 상태 확인 실패:", err)
+      }
+    }, 3000) // 3초마다 확인
+    
+    return () => clearInterval(interval)
+  }, [isProcessing, roomId])
 
   const loadChatRoom = async () => {
     try {
@@ -79,9 +135,13 @@ const ChatRoomDetailPanel = ({ roomId }) => {
 
   const handleSendQuestion = async (e) => {
     e.preventDefault()
-    if (!question.trim()) return
+    if (!question.trim() || isProcessing) {
+      return
+    }
 
     setLoading(true)
+    setRoomProcessing(true) // 현재 채팅방 처리 중
+    setIsProcessing(true) // 전역 상태: 요청 시작 시 처리 중으로 표시
     try {
       // 질문 전송 및 응답 받기 (응답에는 업데이트된 노트 내용이 포함됨)
       const response = await gptAPI.sendQuestion({
@@ -104,10 +164,24 @@ const ChatRoomDetailPanel = ({ roomId }) => {
         loadHistory(),
         loadStatistics()
       ])
+      
     } catch (err) {
-      alert(err.response?.data?.error || "질문 전송에 실패했습니다.")
+      // ChatResponseDTO는 answer 필드를 사용하므로 answer 또는 error 모두 확인
+      const errorMessage = err.response?.data?.answer || err.response?.data?.error || err.response?.data?.message || err.message || "질문 전송에 실패했습니다."
+      alert(errorMessage)
+      
+      // "이미 처리 중" 에러인 경우 전역 상태 유지
+      if (err.response?.status === 409 || errorMessage.includes("이미 처리 중") || errorMessage.includes("처리 중인 요청")) {
+        // 이미 전역 상태가 true이므로 유지
+        setRoomProcessing(true) // 현재 채팅방도 처리 중으로 표시
+      } else {
+        setIsProcessing(false) // 다른 에러 시 전역 처리 중 상태 해제
+        setRoomProcessing(false) // 현재 채팅방도 처리 완료
+      }
     } finally {
       setLoading(false)
+      // 성공 시 DB의 isProcessing이 false가 될 때까지 상태 유지
+      // 주기적 확인으로 자동 해제됨
     }
   }
 
@@ -139,6 +213,21 @@ const ChatRoomDetailPanel = ({ roomId }) => {
       setEditingTitle("")
     } catch (err) {
       alert("제목 저장에 실패했습니다.")
+    }
+  }
+
+  const handleDeleteRoom = async () => {
+    if (!window.confirm("정말 이 채팅방을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+      return
+    }
+
+    try {
+      await chatRoomAPI.delete(roomId)
+      if (onRoomDeleted) {
+        onRoomDeleted()
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || "채팅방 삭제에 실패했습니다.")
     }
   }
 
@@ -175,9 +264,26 @@ const ChatRoomDetailPanel = ({ roomId }) => {
         ) : (
           <div style={styles.titleContainer}>
             <h1 style={styles.title}>{chatRoom.title || "세션"}</h1>
-            <button onClick={handleStartEditTitle} style={styles.editTitleBtn} title="제목 편집">
-              <Edit2 size={18} />
-            </button>
+            <div style={styles.titleButtons}>
+              <button 
+                onClick={handleStartEditTitle} 
+                style={styles.editTitleBtn} 
+                title="제목 편집"
+                onMouseEnter={(e) => e.target.style.color = "#3b82f6"}
+                onMouseLeave={(e) => e.target.style.color = "#9ca3af"}
+              >
+                <Edit2 size={18} />
+              </button>
+              <button 
+                onClick={handleDeleteRoom} 
+                style={styles.deleteTitleBtn} 
+                title="채팅방 삭제"
+                onMouseEnter={(e) => e.target.style.color = "#ef4444"}
+                onMouseLeave={(e) => e.target.style.color = "#9ca3af"}
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -208,7 +314,7 @@ const ChatRoomDetailPanel = ({ roomId }) => {
       {activeTab === "chat" && (
         <div style={styles.chatContainer}>
           <div style={styles.history}>
-            {loading ? (
+            {(loading || roomProcessing) ? (
               <div style={styles.loadingOverlay}>
                 <div style={styles.loadingSpinner}></div>
                 <p style={styles.loadingText}>응답을 생성하고 있습니다...</p>
@@ -241,10 +347,18 @@ const ChatRoomDetailPanel = ({ roomId }) => {
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="질문을 입력하세요..."
                 style={styles.input}
-                disabled={loading}
+                disabled={loading || isProcessing}
               />
-              <button type="submit" disabled={loading} style={styles.sendBtn}>
-                {loading ? "전송 중..." : "전송"}
+              <button 
+                type="submit" 
+                disabled={loading || isProcessing} 
+                style={{
+                  ...styles.sendBtn,
+                  ...(isProcessing && !loading ? styles.sendBtnDisabled : {})
+                }}
+                title={isProcessing && !loading ? "다른 채팅방에서 요청을 처리 중입니다. 완료 후 다시 시도해주세요." : ""}
+              >
+                {loading ? "전송 중..." : isProcessing ? "처리 중..." : "전송"}
               </button>
             </div>
             <div style={styles.optionsContainer}>
@@ -294,10 +408,10 @@ const ChatRoomDetailPanel = ({ roomId }) => {
       {activeTab === "note" && (
         <div style={styles.noteContainer}>
           <div style={styles.noteContent}>
-            {loading ? (
+            {(loading || roomProcessing) ? (
               <div style={styles.noteLoadingOverlay}>
                 <div style={styles.loadingSpinner}></div>
-                <p style={styles.loadingText}>노트를 업데이트하고 있습니다...</p>
+                <p style={styles.loadingText}>응답을 생성하고 있습니다...</p>
               </div>
             ) : (
               <>
@@ -323,10 +437,18 @@ const ChatRoomDetailPanel = ({ roomId }) => {
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder="질문을 입력하세요..."
                   style={styles.input}
-                  disabled={loading}
+                  disabled={loading || isProcessing}
                 />
-                <button type="submit" disabled={loading} style={styles.sendBtn}>
-                  {loading ? "전송 중..." : "전송"}
+                <button 
+                  type="submit" 
+                  disabled={loading || isProcessing} 
+                  style={{
+                    ...styles.sendBtn,
+                    ...(isProcessing && !loading ? styles.sendBtnDisabled : {})
+                  }}
+                  title={isProcessing && !loading ? "다른 채팅방에서 요청을 처리 중입니다. 완료 후 다시 시도해주세요." : ""}
+                >
+                  {loading ? "전송 중..." : isProcessing ? "처리 중..." : "전송"}
                 </button>
               </div>
               <div style={styles.optionsContainer}>
@@ -427,6 +549,11 @@ const styles = {
     gap: "20px",
     marginBottom: "20px",
   },
+  titleButtons: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
   titleContainer: {
     display: "flex",
     alignItems: "center",
@@ -440,6 +567,16 @@ const styles = {
     margin: 0,
   },
   editTitleBtn: {
+    background: "none",
+    border: "none",
+    color: "#9ca3af",
+    cursor: "pointer",
+    padding: "4px",
+    display: "flex",
+    alignItems: "center",
+    transition: "color 0.2s",
+  },
+  deleteTitleBtn: {
     background: "none",
     border: "none",
     color: "#9ca3af",
@@ -575,6 +712,11 @@ const styles = {
     fontSize: "14px",
     fontWeight: "600",
     transition: "all 0.3s ease",
+  },
+  sendBtnDisabled: {
+    background: "rgba(59, 130, 246, 0.3)",
+    cursor: "not-allowed",
+    opacity: 0.6,
   },
   optionsContainer: {
     display: "flex",

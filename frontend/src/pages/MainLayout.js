@@ -1,25 +1,35 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import Sidebar from "../components/Sidebar"
 import ChatRoomListPanel from "../components/ChatRoomListPanel"
 import ChatRoomDetailPanel from "../components/ChatRoomDetailPanel"
 
 const MainLayout = () => {
   const [selectedRoomId, setSelectedRoomId] = useState(null)
+  const chatRoomListRef = useRef(null)
 
   const handleRoomSelect = (roomId) => {
     setSelectedRoomId(roomId)
+  }
+
+  const handleRoomDeleted = () => {
+    setSelectedRoomId(null)
+    // ChatRoomListPanel의 loadChatRooms 호출
+    if (chatRoomListRef.current) {
+      chatRoomListRef.current.refreshRooms()
+    }
   }
 
   return (
     <div style={styles.container}>
       <Sidebar />
       <ChatRoomListPanel
+        ref={chatRoomListRef}
         onRoomSelect={handleRoomSelect}
         selectedRoomId={selectedRoomId}
       />
       <div style={styles.detailArea}>
         {selectedRoomId ? (
-          <ChatRoomDetailPanel key={selectedRoomId} roomId={selectedRoomId} />
+          <ChatRoomDetailPanel key={selectedRoomId} roomId={selectedRoomId} onRoomDeleted={handleRoomDeleted} />
         ) : (
           <div style={styles.emptyState}>
             <div style={styles.emptyIcon}>💬</div>

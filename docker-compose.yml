@@ -40,7 +40,7 @@ services:
       - DB_NAME=${DB_NAME:-whatdoyouthink}
       - DB_USERNAME=${DB_USERNAME:-root}
       - DB_PASSWORD=${DB_PASSWORD:-rootpassword}
-      - JPA_DDL_AUTO=update
+      - JPA_DDL_AUTO=create
       - JPA_SHOW_SQL=true
     volumes:
       - ./backend/src/main/resources/prompts:/app/prompts:ro

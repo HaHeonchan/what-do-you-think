@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
 import { useAuth } from "../contexts/AuthContext"
 import { chatRoomAPI } from "../services/api"
 import { Edit2, Check, X } from "lucide-react"
 
-const ChatRoomListPanel = ({ onRoomSelect, selectedRoomId }) => {
+const ChatRoomListPanel = forwardRef(({ onRoomSelect, selectedRoomId }, ref) => {
   const [chatRooms, setChatRooms] = useState([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
@@ -15,6 +15,10 @@ const ChatRoomListPanel = ({ onRoomSelect, selectedRoomId }) => {
   useEffect(() => {
     loadChatRooms()
   }, [])
+
+  useImperativeHandle(ref, () => ({
+    refreshRooms: loadChatRooms
+  }))
 
   const loadChatRooms = async () => {
     try {
@@ -187,7 +191,7 @@ const ChatRoomListPanel = ({ onRoomSelect, selectedRoomId }) => {
       </div>
     </div>
   )
-}
+})
 
 const styles = {
   container: {

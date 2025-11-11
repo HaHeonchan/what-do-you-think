@@ -66,5 +66,13 @@ public class ChatRoomService {
         chatRoom.setNote(note);
         return chatRoomRepository.save(chatRoom);
     }
+
+    @Transactional
+    public void deleteChatRoom(Long chatRoomId, Long userId) {
+        ChatRoom chatRoom = getChatRoom(chatRoomId, userId)
+                .orElseThrow(() -> new RuntimeException("대화방을 찾을 수 없거나 접근 권한이 없습니다."));
+        
+        chatRoomRepository.delete(chatRoom);
+    }
 }
 

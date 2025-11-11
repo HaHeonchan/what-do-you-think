@@ -62,6 +62,11 @@ public class ChatService {
         if (requestDTO.getChatRoomId() != null) {
             chatRoom = chatRoomRepository.findByIdAndMember(requestDTO.getChatRoomId(), member)
                     .orElseThrow(() -> new RuntimeException("대화방을 찾을 수 없거나 접근 권한이 없습니다."));
+            
+            // 이미 처리 중인지 확인
+            if (Boolean.TRUE.equals(chatRoom.getIsProcessing())) {
+                throw new RuntimeException("이미 처리 중인 요청이 있습니다. 잠시 후 다시 시도해주세요.");
+            }
         } else {
             // 새 대화방 생성
             String title = requestDTO.getQuestion().length() > 50 
@@ -70,11 +75,17 @@ public class ChatService {
             ChatRoom newChatRoom = ChatRoom.builder()
                     .member(member)
                     .title(title)
+                    .isProcessing(false)
                     .build();
             chatRoom = chatRoomRepository.save(newChatRoom);
         }
 
-        // 사용자 입력 저장
+        // 처리 시작: isProcessing을 true로 설정
+        chatRoom.setIsProcessing(true);
+        chatRoomRepository.save(chatRoom);
+
+        try {
+            // 사용자 입력 저장
         ChatEntity userMessage = ChatEntity.builder()
                 .chatRoom(chatRoom)
                 .message(requestDTO.getQuestion())
@@ -238,9 +249,17 @@ public class ChatService {
         String summaryText = summarize(allHistory, chatRoom, chatRoom.getNote());
         // 노트 업데이트 (요약 저장)
         chatRoom.setNote(summaryText);
+        // 처리 완료: isProcessing을 false로 설정
+        chatRoom.setIsProcessing(false);
         // 대화방 업데이트 시간 갱신
         chatRoomRepository.save(chatRoom);
         return new ChatResponseDTO(summaryText);
+        } catch (Exception e) {
+            // 에러 발생 시에도 처리 상태 해제
+            chatRoom.setIsProcessing(false);
+            chatRoomRepository.save(chatRoom);
+            throw e;
+        }
     }
 
     private List<Map<String, String>> buildMessages(String roleKey, String userQuestion, List<ChatEntity> history, String existingNote) {

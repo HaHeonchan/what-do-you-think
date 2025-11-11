@@ -19,7 +19,7 @@ const ChatRoomList = () => {
       const res = await chatRoomAPI.getAll()
       setChatRooms(res.data)
     } catch (err) {
-      setError("대화방 목록을 불러오는데 실패했습니다.")
+      setError("세션 목록을 불러오는데 실패했습니다.")
     } finally {
       setLoading(false)
     }
@@ -53,15 +53,15 @@ const ChatRoomList = () => {
       {error && <div style={styles.error}>{error}</div>}
 
       <button onClick={handleCreateRoom} style={styles.createBtn}>
-        + 새 대화방
+        + 새 세션
       </button>
 
       <div style={styles.roomList}>
         {chatRooms.length === 0 ? (
           <div style={styles.empty}>
             <div style={styles.emptyIcon}>📭</div>
-            <p>대화방이 없습니다</p>
-            <p style={styles.emptySubtext}>새 대화방을 만들어 시작해보세요</p>
+            <p>세션이 없습니다</p>
+            <p style={styles.emptySubtext}>새 세션을 만들어 시작해보세요</p>
           </div>
         ) : (
           chatRooms.map((room) => (

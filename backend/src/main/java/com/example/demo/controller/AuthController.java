@@ -68,5 +68,16 @@ public class AuthController {
                     .body(Map.of("error", e.getMessage()));
         }
     }
+
+    @PostMapping("/guest")
+    public ResponseEntity<?> createGuest() {
+        try {
+            AuthResponseDTO response = authService.createGuest();
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
 }
 

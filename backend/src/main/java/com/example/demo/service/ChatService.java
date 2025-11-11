@@ -86,24 +86,24 @@ public class ChatService {
         // 프롬프트 키 검증 및 기본값 설정
         List<String> promptKeys = requestDTO.getPromptKeys();
         if (promptKeys == null || promptKeys.isEmpty()) {
-            // 기본 역할: creator, critic, analyst, optimizer
-            promptKeys = List.of("creator", "critic", "analyst", "optimizer");
+            // 기본 역할: creator, critic, analyst
+            promptKeys = List.of("creator", "critic", "analyst");
         }
         final List<String> finalPromptKeys = promptKeys;
 
         // 해당 대화방의 대화 히스토리 로드
         List<ChatEntity> allHistory = chatRepository.findByChatRoomOrderByTimestampAsc(chatRoom);
         
-        // 대화 라운드 수 설정
+        // 대화 횟수 설정
         int rounds = 1;
         if(requestDTO.getConversationRounds() != null) {
             rounds = requestDTO.getConversationRounds();
         }
 
-        // 라운드별 처리
+        // 대화 횟수별 처리
         ChatEntity lastModeratorResponse = null;
         for (int round = 0; round < rounds; round++) {
-            System.out.println("\n========== 라운드 " + (round + 1) + " ==========");
+            System.out.println("\n========== 대화 " + (round + 1) + "회차 ==========");
             
             // 사회자에게 누구에게 물어볼지 결정 요청
             List<Map<String, String>> moderatorMessages = buildMessages("moderator", requestDTO.getQuestion(), allHistory, chatRoom.getNote());
@@ -194,7 +194,7 @@ public class ChatService {
             }
         }
 
-        // 사회자 응답도 통계에 반영 (마지막 라운드)
+        // 사회자 응답도 통계에 반영 (마지막 대화)
         if (lastModeratorResponse != null) {
             if (lastModeratorResponse.getTokensUsed() != null && lastModeratorResponse.getTokensUsed() > 0) {
                 chatRoom.addTokensUsed(lastModeratorResponse.getTokensUsed());

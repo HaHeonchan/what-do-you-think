@@ -41,6 +41,7 @@ api.interceptors.response.use(
 export const authAPI = {
   register: (data) => api.post('/auth/register', data),
   login: (data) => api.post('/auth/login', data),
+  guest: () => api.post('/auth/guest'),
 };
 
 // 멤버 API
@@ -54,6 +55,7 @@ export const chatRoomAPI = {
   getAll: () => api.get('/chat-rooms'),
   getById: (id) => api.get(`/chat-rooms/${id}`),
   updateNote: (id, data) => api.put(`/chat-rooms/${id}/note`, data),
+  updateTitle: (id, data) => api.put(`/chat-rooms/${id}/title`, data),
   getHistory: (id) => api.get(`/chat-rooms/${id}/history`),
   getStatistics: (id) => api.get(`/chat-rooms/${id}/statistics`),
 };

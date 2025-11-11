@@ -57,8 +57,17 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const guestLogin = async () => {
+    const res = await authAPI.guest();
+    const { token, userId, username: userUsername } = res.data;
+    localStorage.setItem('token', token);
+    localStorage.setItem('userId', userId);
+    setUser({ id: userId, username: userUsername, email: null, isGuest: true });
+    return res.data;
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, guestLogin }}>
       {children}
     </AuthContext.Provider>
   );

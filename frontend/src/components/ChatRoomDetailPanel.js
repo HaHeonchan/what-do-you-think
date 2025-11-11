@@ -1,25 +1,26 @@
 import { useState, useEffect } from "react"
 import { chatRoomAPI, gptAPI } from "../services/api"
-import { FileText, MessageSquare, BarChart3, Lightbulb, Search, Zap, Globe } from "lucide-react"
+import { FileText, MessageSquare, BarChart3, Lightbulb, Search, Zap, Globe, Edit2, Check, X } from "lucide-react"
 
 const ChatRoomDetailPanel = ({ roomId }) => {
   const [chatRoom, setChatRoom] = useState(null)
   const [history, setHistory] = useState([])
   const [statistics, setStatistics] = useState(null)
   const [question, setQuestion] = useState("")
-  const [promptKeys, setPromptKeys] = useState(["creator", "critic", "analyst", "optimizer"])
+  const [promptKeys, setPromptKeys] = useState(["creator", "critic", "analyst"])
   const [conversationRounds, setConversationRounds] = useState(1)
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("note")
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [editingTitle, setEditingTitle] = useState("")
 
   const availableRoles = [
-    { key: "creator", label: "창의적 아이디어 제시자", icon: Lightbulb, color: "#fbbf24" },
-    { key: "critic", label: "비판적 분석가", icon: Search, color: "#60a5fa" },
-    { key: "analyst", label: "객관적 분석가", icon: BarChart3, color: "#34d399" },
-    { key: "optimizer", label: "최적화 전문가", icon: Zap, color: "#f97316" },
-    { key: "researcher", label: "웹 검색 연구 전문가", icon: Globe, color: "#8b5cf6" },
+    { key: "creator", label: "생성자", icon: Lightbulb, color: "#fbbf24" },
+    { key: "critic", label: "비판자", icon: Search, color: "#60a5fa" },
+    { key: "analyst", label: "분석가", icon: BarChart3, color: "#34d399" },
+    { key: "researcher", label: "웹 검색", icon: Globe, color: "#8b5cf6" },
   ]
 
   const handleRoleToggle = (roleKey) => {
@@ -119,6 +120,27 @@ const ChatRoomDetailPanel = ({ roomId }) => {
     }
   }
 
+  const handleStartEditTitle = () => {
+    setEditingTitle(chatRoom.title || "")
+    setIsEditingTitle(true)
+  }
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false)
+    setEditingTitle("")
+  }
+
+  const handleSaveTitle = async () => {
+    try {
+      const res = await chatRoomAPI.updateTitle(roomId, { title: editingTitle })
+      setChatRoom(res.data)
+      setIsEditingTitle(false)
+      setEditingTitle("")
+    } catch (err) {
+      alert("제목 저장에 실패했습니다.")
+    }
+  }
+
   if (pageLoading || !chatRoom) {
     return <div style={styles.center}>로딩 중...</div>
   }
@@ -126,7 +148,37 @@ const ChatRoomDetailPanel = ({ roomId }) => {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>{chatRoom.title || "대화방"}</h1>
+        {isEditingTitle ? (
+          <div style={styles.titleEditContainer}>
+            <input
+              type="text"
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSaveTitle()
+                } else if (e.key === "Escape") {
+                  handleCancelEditTitle()
+                }
+              }}
+              autoFocus
+              style={styles.titleInput}
+            />
+            <button onClick={handleSaveTitle} style={styles.titleEditBtn}>
+              <Check size={18} />
+            </button>
+            <button onClick={handleCancelEditTitle} style={styles.titleEditBtn}>
+              <X size={18} />
+            </button>
+          </div>
+        ) : (
+          <div style={styles.titleContainer}>
+            <h1 style={styles.title}>{chatRoom.title || "세션"}</h1>
+            <button onClick={handleStartEditTitle} style={styles.editTitleBtn} title="제목 편집">
+              <Edit2 size={18} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={styles.tabs}>
@@ -191,7 +243,7 @@ const ChatRoomDetailPanel = ({ roomId }) => {
             </div>
             <div style={styles.optionsContainer}>
               <div style={styles.roleSelection}>
-                <div style={styles.roleSelectionLabel}>역할 선택:</div>
+                <div style={styles.roleSelectionLabel}>역할:</div>
                 <div style={styles.roleCheckboxes}>
                   {availableRoles.map((role) => {
                     const Icon = role.icon
@@ -213,17 +265,17 @@ const ChatRoomDetailPanel = ({ roomId }) => {
                 </div>
               </div>
               <div style={styles.options}>
-                <label style={styles.optionLabel}>
-                  라운드 수:
-                  <input
-                    type="number"
-                    value={conversationRounds}
-                    onChange={(e) => setConversationRounds(Number.parseInt(e.target.value))}
-                    min="1"
-                    max="5"
-                    style={styles.numberInput}
-                  />
-                </label>
+                  <label style={styles.optionLabel}>
+                    대화 횟수:
+                    <input
+                      type="number"
+                      value={conversationRounds}
+                      onChange={(e) => setConversationRounds(Number.parseInt(e.target.value))}
+                      min="1"
+                      max="5"
+                      style={styles.numberInput}
+                    />
+                  </label>
               </div>
             </div>
           </form>
@@ -293,7 +345,7 @@ const ChatRoomDetailPanel = ({ roomId }) => {
                 </div>
                 <div style={styles.options}>
                   <label style={styles.optionLabel}>
-                    라운드 수:
+                    대화 횟수:
                     <input
                       type="number"
                       value={conversationRounds}
@@ -366,11 +418,55 @@ const styles = {
     gap: "20px",
     marginBottom: "20px",
   },
+  titleContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    flex: 1,
+  },
   title: {
     fontSize: "24px",
     fontWeight: "700",
     color: "#ffffff",
     margin: 0,
+  },
+  editTitleBtn: {
+    background: "none",
+    border: "none",
+    color: "#9ca3af",
+    cursor: "pointer",
+    padding: "4px",
+    display: "flex",
+    alignItems: "center",
+    transition: "color 0.2s",
+  },
+  titleEditContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flex: 1,
+  },
+  titleInput: {
+    flex: 1,
+    padding: "8px 12px",
+    border: "1px solid rgba(59, 130, 246, 0.3)",
+    borderRadius: "6px",
+    fontSize: "24px",
+    fontWeight: "700",
+    backgroundColor: "rgba(15, 20, 25, 0.6)",
+    color: "#ffffff",
+    outline: "none",
+  },
+  titleEditBtn: {
+    background: "rgba(59, 130, 246, 0.2)",
+    border: "1px solid rgba(59, 130, 246, 0.3)",
+    borderRadius: "6px",
+    color: "#3b82f6",
+    cursor: "pointer",
+    padding: "8px",
+    display: "flex",
+    alignItems: "center",
+    transition: "all 0.2s",
   },
   tabs: {
     display: "flex",

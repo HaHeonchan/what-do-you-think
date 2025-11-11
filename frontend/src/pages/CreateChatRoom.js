@@ -5,18 +5,17 @@ import { chatRoomAPI, gptAPI } from "../services/api"
 const CreateChatRoom = ({ onSuccess }) => {
   const [title, setTitle] = useState("")
   const [question, setQuestion] = useState("")
-  const [promptKeys, setPromptKeys] = useState(["creator", "critic", "analyst", "optimizer"])
+  const [promptKeys, setPromptKeys] = useState(["creator", "critic", "analyst"])
   const [conversationRounds, setConversationRounds] = useState(1)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
   // 사용 가능한 역할 목록
   const availableRoles = [
-    { key: "creator", label: "창의적 아이디어 제시자", emoji: "💡" },
-    { key: "critic", label: "비판적 분석가", emoji: "🔍" },
-    { key: "analyst", label: "객관적 분석가", emoji: "📊" },
-    { key: "optimizer", label: "최적화 전문가", emoji: "⚡" },
-    { key: "researcher", label: "웹 검색 연구 전문가", emoji: "🌐" },
+    { key: "creator", label: "생성자", emoji: "💡" },
+    { key: "critic", label: "비판자", emoji: "🔍" },
+    { key: "analyst", label: "분석가", emoji: "📊" },
+    { key: "researcher", label: "웹 검색", emoji: "🌐" },
   ]
 
   const handleRoleToggle = (roleKey) => {
@@ -62,7 +61,7 @@ const CreateChatRoom = ({ onSuccess }) => {
         }
       }
     } catch (err) {
-      alert(err.response?.data?.error || "대화방 생성에 실패했습니다.")
+      alert(err.response?.data?.error || "세션 생성에 실패했습니다.")
     } finally {
       setLoading(false)
     }
@@ -75,7 +74,7 @@ const CreateChatRoom = ({ onSuccess }) => {
           <div style={styles.logoIcon}>💬</div>
         </div>
         <div style={styles.card}>
-          <h1 style={styles.title}>새 대화방 만들기</h1>
+          <h1 style={styles.title}>새 세션 만들기</h1>
           <p style={styles.subtitle}>질문을 입력하여 대화를 시작하세요</p>
 
           <form onSubmit={handleSubmit} style={styles.form}>
@@ -103,7 +102,7 @@ const CreateChatRoom = ({ onSuccess }) => {
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>역할 선택 *</label>
+              <label style={styles.label}>역할 *</label>
               <div style={styles.roleSelection}>
                 {availableRoles.map((role) => (
                   <label key={role.key} style={styles.roleCheckbox}>
@@ -122,7 +121,7 @@ const CreateChatRoom = ({ onSuccess }) => {
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>대화 라운드 수</label>
+              <label style={styles.label}>대화 횟수</label>
               <input
                 type="number"
                 value={conversationRounds}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { chatRoomAPI, gptAPI } from "../services/api"
+import { Edit2, Check, X } from "lucide-react"
 
 const ChatRoomDetail = () => {
   const { id } = useParams()
@@ -9,19 +10,20 @@ const ChatRoomDetail = () => {
   const [history, setHistory] = useState([])
   const [statistics, setStatistics] = useState(null)
   const [question, setQuestion] = useState("")
-  const [promptKeys, setPromptKeys] = useState(["creator", "critic", "analyst", "optimizer"])
+  const [promptKeys, setPromptKeys] = useState(["creator", "critic", "analyst"])
   const [conversationRounds, setConversationRounds] = useState(1)
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("chat")
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [editingTitle, setEditingTitle] = useState("")
 
   // 사용 가능한 역할 목록
   const availableRoles = [
-    { key: "creator", label: "창의적 아이디어 제시자", emoji: "💡" },
-    { key: "critic", label: "비판적 분석가", emoji: "🔍" },
-    { key: "analyst", label: "객관적 분석가", emoji: "📊" },
-    { key: "optimizer", label: "최적화 전문가", emoji: "⚡" },
-    { key: "researcher", label: "웹 검색 연구 전문가", emoji: "🌐" },
+    { key: "creator", label: "생성자", emoji: "💡" },
+    { key: "critic", label: "비판자", emoji: "🔍" },
+    { key: "analyst", label: "분석가", emoji: "📊" },
+    { key: "researcher", label: "웹 검색", emoji: "🌐" },
   ]
 
   const handleRoleToggle = (roleKey) => {
@@ -103,6 +105,27 @@ const ChatRoomDetail = () => {
     }
   }
 
+  const handleStartEditTitle = () => {
+    setEditingTitle(chatRoom.title || "")
+    setIsEditingTitle(true)
+  }
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false)
+    setEditingTitle("")
+  }
+
+  const handleSaveTitle = async () => {
+    try {
+      const res = await chatRoomAPI.updateTitle(id, { title: editingTitle })
+      setChatRoom(res.data)
+      setIsEditingTitle(false)
+      setEditingTitle("")
+    } catch (err) {
+      alert("제목 저장에 실패했습니다.")
+    }
+  }
+
   if (!chatRoom) {
     return <div style={styles.center}>로딩 중...</div>
   }
@@ -113,7 +136,37 @@ const ChatRoomDetail = () => {
         <button onClick={() => navigate("/chat-rooms")} style={styles.backBtn}>
           ← 돌아가기
         </button>
-        <h1 style={styles.title}>{chatRoom.title || "대화방"}</h1>
+        {isEditingTitle ? (
+          <div style={styles.titleEditContainer}>
+            <input
+              type="text"
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSaveTitle()
+                } else if (e.key === "Escape") {
+                  handleCancelEditTitle()
+                }
+              }}
+              autoFocus
+              style={styles.titleInput}
+            />
+            <button onClick={handleSaveTitle} style={styles.titleEditBtn}>
+              <Check size={18} />
+            </button>
+            <button onClick={handleCancelEditTitle} style={styles.titleEditBtn}>
+              <X size={18} />
+            </button>
+          </div>
+        ) : (
+          <div style={styles.titleContainer}>
+            <h1 style={styles.title}>{chatRoom.title || "세션"}</h1>
+            <button onClick={handleStartEditTitle} style={styles.editTitleBtn} title="제목 편집">
+              <Edit2 size={18} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={styles.tabs}>
@@ -167,7 +220,7 @@ const ChatRoomDetail = () => {
             </div>
             <div style={styles.optionsContainer}>
               <div style={styles.roleSelection}>
-                <div style={styles.roleSelectionLabel}>역할 선택:</div>
+                <div style={styles.roleSelectionLabel}>역할:</div>
                 <div style={styles.roleCheckboxes}>
                   {availableRoles.map((role) => (
                     <label key={role.key} style={styles.roleCheckbox}>
@@ -186,7 +239,7 @@ const ChatRoomDetail = () => {
               </div>
               <div style={styles.options}>
                 <label style={styles.optionLabel}>
-                  라운드 수:
+                  대화 횟수:
                   <input
                     type="number"
                     value={conversationRounds}
@@ -280,11 +333,55 @@ const styles = {
     fontWeight: "600",
     transition: "all 0.3s ease",
   },
+  titleContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    flex: 1,
+  },
   title: {
     fontSize: "28px",
     fontWeight: "700",
     color: "#ffffff",
     margin: 0,
+  },
+  editTitleBtn: {
+    background: "none",
+    border: "none",
+    color: "#9ca3af",
+    cursor: "pointer",
+    padding: "4px",
+    display: "flex",
+    alignItems: "center",
+    transition: "color 0.2s",
+  },
+  titleEditContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flex: 1,
+  },
+  titleInput: {
+    flex: 1,
+    padding: "8px 12px",
+    border: "1px solid rgba(59, 130, 246, 0.3)",
+    borderRadius: "6px",
+    fontSize: "28px",
+    fontWeight: "700",
+    backgroundColor: "rgba(15, 20, 25, 0.6)",
+    color: "#ffffff",
+    outline: "none",
+  },
+  titleEditBtn: {
+    background: "rgba(59, 130, 246, 0.2)",
+    border: "1px solid rgba(59, 130, 246, 0.3)",
+    borderRadius: "6px",
+    color: "#3b82f6",
+    cursor: "pointer",
+    padding: "8px",
+    display: "flex",
+    alignItems: "center",
+    transition: "all 0.2s",
   },
   tabs: {
     display: "flex",

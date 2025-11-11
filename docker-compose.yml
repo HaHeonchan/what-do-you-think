@@ -1,4 +1,26 @@
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: what-do-you-think-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-whatdoyouthink}
+      MYSQL_USER: ${DB_USERNAME:-root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-rootpassword}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # 초기화 스크립트가 필요한 경우 아래 주석 해제
+      # - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -13,10 +35,19 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - GOOGLE_CUSTOM_SEARCH_API_KEY=${GOOGLE_CUSTOM_SEARCH_API_KEY}
       - GOOGLE_CUSTOM_SEARCH_CX_ID=${GOOGLE_CUSTOM_SEARCH_CX_ID}
-      - SPRING_PROFILES_ACTIVE=prod
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-whatdoyouthink}
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-rootpassword}
+      - JPA_DDL_AUTO=update
+      - JPA_SHOW_SQL=true
     volumes:
       - ./backend/src/main/resources/prompts:/app/prompts:ro
       - ./.env:/app/.env:ro  # .env 파일을 컨테이너에 마운트
+    depends_on:
+      mysql:
+        condition: service_healthy
     networks:
       - app-network
 
@@ -35,4 +66,7 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  mysql_data:
 

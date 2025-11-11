@@ -1,9 +1,6 @@
 spring:
   application:
     name: demo
-#  devtools:
-#    restart:
-#      enabled: true
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
@@ -13,32 +10,28 @@ spring:
         temperature: 0.3
         max-tokens: 1024
 
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:whatdoyouthink}?useSSL=${DB_USE_SSL:false}&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:rootpassword}
+
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: ${JPA_FORMAT_SQL:true}
 
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
-
-  datasource:
-    url: jdbc:h2:mem:testdb
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
-
-# JWT 설정
 jwt:
-  # JWT_SECRET은 환경 변수에서만 가져옵니다 (보안을 위해 기본값 없음)
   secret: ${JWT_SECRET}
-  expiration: 86400000 # 24시간 (밀리초)
+  expiration: 86400000
 
-# Google Custom Search API 설정
 google:
   custom-search:
     api-key: ${GOOGLE_CUSTOM_SEARCH_API_KEY}
     cx-id: ${GOOGLE_CUSTOM_SEARCH_CX_ID}
     base-url: https://www.googleapis.com/customsearch/v1
-    # 검색 결과에서 제외할 도메인 목록 (쉼표로 구분, 선택사항)
     excluded-domains: obsidian.md,maps.apple.com,jongro.co.kr,community.jmp.com,google.com/gasearch

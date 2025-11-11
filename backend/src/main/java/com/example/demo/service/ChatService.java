@@ -94,19 +94,22 @@ public class ChatService {
         // 해당 대화방의 대화 히스토리 로드
         List<ChatEntity> allHistory = chatRepository.findByChatRoomOrderByTimestampAsc(chatRoom);
         
-        // 대화 횟수 설정
-        int rounds = 1;
-        if(requestDTO.getConversationRounds() != null) {
-            rounds = requestDTO.getConversationRounds();
+        // 최대 대화 횟수 설정 (사용자가 지정한 횟수만큼만 반복)
+        int maxRounds = 10; // 기본값
+        if(requestDTO.getConversationRounds() != null && requestDTO.getConversationRounds() > 0) {
+            maxRounds = requestDTO.getConversationRounds();
         }
 
-        // 대화 횟수별 처리
-        ChatEntity lastModeratorResponse = null;
-        for (int round = 0; round < rounds; round++) {
-            System.out.println("\n========== 대화 " + (round + 1) + "회차 ==========");
+        // 자율적인 대화 진행 (모더레이터가 종료할 때까지 또는 최대 횟수까지)
+        int round = 0;
+        boolean shouldEnd = false;
+        
+        while (round < maxRounds && !shouldEnd) {
+            round++;
+            System.out.println("\n========== 대화 " + round + "회차 (최대 " + maxRounds + "회차) ==========");
             
             // 사회자에게 누구에게 물어볼지 결정 요청
-            List<Map<String, String>> moderatorMessages = buildMessages("moderator", requestDTO.getQuestion(), allHistory, chatRoom.getNote());
+            List<Map<String, String>> moderatorMessages = buildMessages("moderator", requestDTO.getQuestion(), allHistory, chatRoom.getNote(), round, maxRounds);
             ChatEntity moderatorResponse = gptService.requestGpt(moderatorMessages, "moderator");
             
             // 사회자 응답 출력 및 저장
@@ -114,92 +117,122 @@ public class ChatService {
                 moderatorResponse.setChatRoom(chatRoom);
                 chatRepository.save(moderatorResponse);
                 allHistory.add(moderatorResponse);
-                lastModeratorResponse = moderatorResponse; // 루프 외부에서 사용하기 위해
                 System.out.println("[사회자 원본 응답]");
                 System.out.println(moderatorResponse.getMessage());
                 System.out.println("---");
-            } else {
-                System.out.println("[사회자 응답 없음]");
-            }
-            
-            // 사회자 응답 파싱 (request 배열 지원)
-            List<CompletableFuture<ChatEntity>> futures = new ArrayList<>();
-            if (moderatorResponse != null) {
+                
+                // 사회자 응답 파싱 및 종료 여부 확인
                 ModeratorResponseDTO decision = parseModerator(moderatorResponse.getMessage());
-                if (decision != null && decision.getRequest() != null && !decision.getRequest().isEmpty()) {
-                    System.out.println("[파싱 성공] 사회자 요청 수: " + decision.getRequest().size());
-                    decision.getRequest().stream()
-                            .filter(item -> {
-                                boolean allowed = finalPromptKeys != null && finalPromptKeys.contains(item.getRoleKey());
-                                if (!allowed) {
-                                    System.out.println("[필터링] 허용되지 않은 roleKey 제거: " + item.getRoleKey());
-                                }
-                                return allowed;
-                            })
-                            .forEach(item -> {
-                        String roleKey = item.getRoleKey();
-                        String questionToExperts = item.getMessages() != null ? item.getMessages() : requestDTO.getQuestion();
-                        List<Map<String, String>> messages = buildMessages(roleKey, questionToExperts, allHistory, null);
+                if (decision != null) {
+                    // 종료 여부 확인
+                    if (Boolean.TRUE.equals(decision.getShouldEnd())) {
+                        System.out.println("[사회자 결정] 대화를 종료합니다.");
+                        shouldEnd = true;
+                        // 종료 시에도 통계 반영
+                        if (moderatorResponse.getTokensUsed() != null && moderatorResponse.getTokensUsed() > 0) {
+                            chatRoom.addTokensUsed(moderatorResponse.getTokensUsed());
+                        }
+                        chatRoom.incrementRoleParticipation("moderator");
+                        break; // 루프 종료
+                    }
+                    
+                    // 요청이 있으면 처리
+                    if (decision.getRequest() != null && !decision.getRequest().isEmpty()) {
+                        System.out.println("[파싱 성공] 사회자 요청 수: " + decision.getRequest().size());
+                        
+                        // 사회자 요청 처리
+                        List<CompletableFuture<ChatEntity>> futures = new ArrayList<>();
+                        decision.getRequest().stream()
+                                .filter(item -> {
+                                    boolean allowed = finalPromptKeys != null && finalPromptKeys.contains(item.getRoleKey());
+                                    if (!allowed) {
+                                        System.out.println("[필터링] 허용되지 않은 roleKey 제거: " + item.getRoleKey());
+                                    }
+                                    return allowed;
+                                })
+                                .forEach(item -> {
+                            String roleKey = item.getRoleKey();
+                            String questionToExperts = item.getMessages() != null ? item.getMessages() : requestDTO.getQuestion();
+                            List<Map<String, String>> messages = buildMessages(roleKey, questionToExperts, allHistory, null);
+                            CompletableFuture<ChatEntity> future = CompletableFuture
+                                    .supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
+                                    .orTimeout(45, TimeUnit.SECONDS)
+                                    .exceptionally(ex -> null);
+                            futures.add(future);
+                        });
+                        
+                        // 전문가 응답 대기 및 저장
+                        List<ChatEntity> roundAnswers = futures.stream()
+                                .map(CompletableFuture::join)
+                                .filter(answer -> answer != null)
+                                .peek(answer -> {
+                                    answer.setChatRoom(chatRoom);
+                                    // 통계 업데이트: 역할별 참여 횟수 및 토큰 사용량
+                                    if (answer.getSender() != null && !answer.getSender().equals("user")) {
+                                        chatRoom.incrementRoleParticipation(answer.getSender());
+                                    }
+                                    if (answer.getTokensUsed() != null && answer.getTokensUsed() > 0) {
+                                        chatRoom.addTokensUsed(answer.getTokensUsed());
+                                    }
+                                })
+                                .toList();
+
+                        if (!roundAnswers.isEmpty()) {
+                            chatRepository.saveAll(roundAnswers);
+                            allHistory.addAll(roundAnswers);
+                        }
+                    } else {
+                        System.out.println("[사회자 요청 없음] 다음 라운드로 진행합니다.");
+                    }
+                } else {
+                    System.out.println("[파싱 실패] 기본 동작으로 진행합니다.");
+                    // 파싱 실패 시 기본 동작
+                    List<CompletableFuture<ChatEntity>> futures = new ArrayList<>();
+                    for (String roleKey : finalPromptKeys) {
+                        List<Map<String, String>> messages = buildMessages(roleKey, requestDTO.getQuestion(), allHistory, null);
                         CompletableFuture<ChatEntity> future = CompletableFuture
                                 .supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
                                 .orTimeout(45, TimeUnit.SECONDS)
                                 .exceptionally(ex -> null);
                         futures.add(future);
-                    });
-                } else {
-                    System.out.println("[파싱 실패 - 기본 프롬프트 키 사용]");
+                    }
+                    
+                    List<ChatEntity> roundAnswers = futures.stream()
+                            .map(CompletableFuture::join)
+                            .filter(answer -> answer != null)
+                            .peek(answer -> {
+                                answer.setChatRoom(chatRoom);
+                                if (answer.getSender() != null && !answer.getSender().equals("user")) {
+                                    chatRoom.incrementRoleParticipation(answer.getSender());
+                                }
+                                if (answer.getTokensUsed() != null && answer.getTokensUsed() > 0) {
+                                    chatRoom.addTokensUsed(answer.getTokensUsed());
+                                }
+                            })
+                            .toList();
+
+                    if (!roundAnswers.isEmpty()) {
+                        chatRepository.saveAll(roundAnswers);
+                        allHistory.addAll(roundAnswers);
+                    }
                 }
-            }
-
-            // 사회자 요청이 없거나 파싱 실패 시 기본 동작
-            if (futures.isEmpty()) {
-                for (String roleKey : finalPromptKeys) {
-                    List<Map<String, String>> messages = buildMessages(roleKey, requestDTO.getQuestion(), allHistory, null);
-                    CompletableFuture<ChatEntity> future = CompletableFuture
-                            .supplyAsync(() -> gptService.requestGpt(messages, roleKey), gptExecutor)
-                            .orTimeout(45, TimeUnit.SECONDS)
-                            .exceptionally(ex -> null);
-                    futures.add(future);
-                }
-            }
-
-            System.out.println("================================\n");
-
-            List<ChatEntity> roundAnswers = futures.stream()
-                    .map(CompletableFuture::join)
-                    .filter(answer -> answer != null)
-                    .peek(answer -> {
-                        answer.setChatRoom(chatRoom);
-                        // 통계 업데이트: 역할별 참여 횟수 및 토큰 사용량
-                        if (answer.getSender() != null && !answer.getSender().equals("user")) {
-                            chatRoom.incrementRoleParticipation(answer.getSender());
-                        }
-                        if (answer.getTokensUsed() != null && answer.getTokensUsed() > 0) {
-                            chatRoom.addTokensUsed(answer.getTokensUsed());
-                        }
-                    })
-                    .toList();
-
-            if (!roundAnswers.isEmpty()) {
-                chatRepository.saveAll(roundAnswers);
-                allHistory.addAll(roundAnswers);
-            }
-            
-            // 사회자 응답도 통계에 반영
-            if (moderatorResponse != null) {
+                
+                // 사회자 응답 통계 반영
                 if (moderatorResponse.getTokensUsed() != null && moderatorResponse.getTokensUsed() > 0) {
                     chatRoom.addTokensUsed(moderatorResponse.getTokensUsed());
                 }
                 chatRoom.incrementRoleParticipation("moderator");
+            } else {
+                System.out.println("[사회자 응답 없음] 대화를 종료합니다.");
+                shouldEnd = true;
             }
+            
+            System.out.println("================================\n");
         }
-
-        // 사회자 응답도 통계에 반영 (마지막 대화)
-        if (lastModeratorResponse != null) {
-            if (lastModeratorResponse.getTokensUsed() != null && lastModeratorResponse.getTokensUsed() > 0) {
-                chatRoom.addTokensUsed(lastModeratorResponse.getTokensUsed());
-            }
-            chatRoom.incrementRoleParticipation("moderator");
+        
+        // 최대 횟수에 도달한 경우 알림
+        if (round >= maxRounds && !shouldEnd) {
+            System.out.println("[최대 횟수 도달] " + maxRounds + "회차에 도달하여 대화를 종료합니다.");
         }
 
         String summaryText = summarize(allHistory, chatRoom, chatRoom.getNote());
@@ -211,6 +244,10 @@ public class ChatService {
     }
 
     private List<Map<String, String>> buildMessages(String roleKey, String userQuestion, List<ChatEntity> history, String existingNote) {
+        return buildMessages(roleKey, userQuestion, history, existingNote, 0, 0);
+    }
+    
+    private List<Map<String, String>> buildMessages(String roleKey, String userQuestion, List<ChatEntity> history, String existingNote, int currentRound, int maxRounds) {
         List<Map<String, String>> messages = new ArrayList<>();
 
         // System 메시지
@@ -227,7 +264,19 @@ public class ChatService {
             }
             
             if ("moderator".equals(roleKey)) {
-                // 사회자는 프롬프트만 사용
+                // 사회자 프롬프트에 현재 라운드 정보 추가
+                if (currentRound > 0 && maxRounds > 0) {
+                    systemContent = systemContent.replace("{currentRound}", String.valueOf(currentRound));
+                    systemContent = systemContent.replace("{maxRounds}", String.valueOf(maxRounds));
+                    
+                    // 라운드 진행률에 따른 추가 안내
+                    double progress = (double) currentRound / maxRounds;
+                    if (progress >= 0.8) {
+                        systemContent += "\n\n⚠️ 경고: 최대 라운드의 80% 이상 진행되었습니다. 반드시 종료를 고려하세요.";
+                    } else if (progress >= 0.7) {
+                        systemContent += "\n\n💡 안내: 최대 라운드의 70% 이상 진행되었습니다. 종료를 적극적으로 고려하세요.";
+                    }
+                }
                 system.put("content", systemContent);
             } else {
                 // 다른 역할들은 debate_response 지시사항 추가

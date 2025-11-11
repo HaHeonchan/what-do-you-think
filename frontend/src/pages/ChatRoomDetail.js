@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { chatRoomAPI, gptAPI } from "../services/api"
 import { Edit2, Check, X } from "lucide-react"
+import { formatModeratorMessage } from "../utils/moderatorFormatter"
 
 const ChatRoomDetail = () => {
   const { id } = useParams()
@@ -195,12 +196,17 @@ const ChatRoomDetail = () => {
                 <p style={styles.emptyHistorySubtext}>질문을 입력하여 시작하세요</p>
               </div>
             ) : (
-              history.map((msg) => (
-                <div key={msg.id} style={styles.message}>
-                  <strong style={styles.sender}>{msg.sender}:</strong>
-                  <span style={styles.messageText}>{msg.message}</span>
-                </div>
-              ))
+              history.map((msg) => {
+                const displayMessage = msg.sender === "moderator" 
+                  ? formatModeratorMessage(msg.message)
+                  : msg.message;
+                return (
+                  <div key={msg.id} style={styles.message}>
+                    <strong style={styles.sender}>{msg.sender}:</strong>
+                    <span style={styles.messageText}>{displayMessage}</span>
+                  </div>
+                );
+              })
             )}
           </div>
 
@@ -239,16 +245,19 @@ const ChatRoomDetail = () => {
               </div>
               <div style={styles.options}>
                 <label style={styles.optionLabel}>
-                  대화 횟수:
+                  최대 대화 횟수:
                   <input
                     type="number"
                     value={conversationRounds}
                     onChange={(e) => setConversationRounds(Number.parseInt(e.target.value))}
                     min="1"
-                    max="5"
+                    max="20"
                     style={styles.numberInput}
                   />
                 </label>
+                <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                  모더레이터가 충분히 논의되었다고 판단하면 그 전에 종료될 수 있습니다.
+                </div>
               </div>
             </div>
           </form>

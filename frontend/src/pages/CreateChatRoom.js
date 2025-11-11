@@ -121,15 +121,18 @@ const CreateChatRoom = ({ onSuccess }) => {
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>대화 횟수</label>
+              <label style={styles.label}>최대 대화 횟수</label>
               <input
                 type="number"
                 value={conversationRounds}
                 onChange={(e) => setConversationRounds(Number.parseInt(e.target.value))}
                 min="1"
-                max="5"
+                max="20"
                 style={styles.numberInput}
               />
+              <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                모더레이터가 충분히 논의되었다고 판단하면 그 전에 종료될 수 있습니다.
+              </div>
             </div>
 
             <div style={styles.buttons}>

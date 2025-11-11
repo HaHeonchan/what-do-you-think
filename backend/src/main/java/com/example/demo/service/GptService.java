@@ -45,7 +45,6 @@ public class GptService {
               "properties": {
                 "request": {
                   "type": "array",
-                  "minItems": 1,
                   "items": {
                     "type": "object",
                     "properties": {
@@ -55,9 +54,12 @@ public class GptService {
                     "required": ["roleKey", "messages"],
                     "additionalProperties": false
                   }
+                },
+                "shouldEnd": {
+                  "type": "boolean",
+                  "description": "대화를 종료할지 여부. 충분히 논의되었다고 판단되면 true로 설정하세요."
                 }
               },
-              "required": ["request"],
               "additionalProperties": false
             }
            """;

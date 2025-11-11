@@ -11,6 +11,8 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_CUSTOM_SEARCH_API_KEY=${GOOGLE_CUSTOM_SEARCH_API_KEY}
+      - GOOGLE_CUSTOM_SEARCH_CX_ID=${GOOGLE_CUSTOM_SEARCH_CX_ID}
       - SPRING_PROFILES_ACTIVE=prod
     volumes:
       - ./backend/src/main/resources/prompts:/app/prompts:ro

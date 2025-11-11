@@ -27,7 +27,7 @@ public class PromptLoader {
         this.instructions = new HashMap<>();
         
         // 마크다운 파일들 로드
-        String[] promptFiles = {"creator.md", "critic.md", "analyst.md", "optimizer.md", "summarizer.md", "moderator.md"};
+        String[] promptFiles = {"creator.md", "critic.md", "analyst.md", "summarizer.md", "moderator.md", "researcher.md"};
 
         for (String fileName : promptFiles) {
             try {

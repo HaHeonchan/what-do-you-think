@@ -33,3 +33,12 @@ jwt:
   # JWT_SECRET은 환경 변수에서만 가져옵니다 (보안을 위해 기본값 없음)
   secret: ${JWT_SECRET}
   expiration: 86400000 # 24시간 (밀리초)
+
+# Google Custom Search API 설정
+google:
+  custom-search:
+    api-key: ${GOOGLE_CUSTOM_SEARCH_API_KEY}
+    cx-id: ${GOOGLE_CUSTOM_SEARCH_CX_ID}
+    base-url: https://www.googleapis.com/customsearch/v1
+    # 검색 결과에서 제외할 도메인 목록 (쉼표로 구분, 선택사항)
+    excluded-domains: obsidian.md,maps.apple.com,jongro.co.kr,community.jmp.com,google.com/gasearch

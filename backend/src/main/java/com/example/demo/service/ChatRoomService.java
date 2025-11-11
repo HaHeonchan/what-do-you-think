@@ -27,7 +27,7 @@ public class ChatRoomService {
         
         ChatRoom chatRoom = ChatRoom.builder()
                 .member(member)
-                .title(title != null ? title : "새 대화방")
+                .title(title != null ? title : "새 세션")
                 .build();
         
         return chatRoomRepository.save(chatRoom);

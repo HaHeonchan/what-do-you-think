@@ -6,7 +6,6 @@ import com.example.demo.entity.ChatRoom;
 import com.example.demo.entity.Member;
 import com.example.demo.service.ChatRoomService;
 import com.example.demo.service.ChatService;
-import com.example.demo.service.MemberService;
 import com.example.demo.util.SecurityUtil;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -146,6 +145,22 @@ public class GptController {
             Long userId = securityUtil.getCurrentUserId();
             String note = request.get("note");
             ChatRoom chatRoom = chatRoomService.updateChatRoomNote(chatRoomId, userId, note);
+            return ResponseEntity.ok(chatRoom);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // 대화방 제목 수정
+    @PutMapping(value = "/chat-rooms/{chatRoomId}/title", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> updateChatRoomTitle(
+            @PathVariable Long chatRoomId,
+            @RequestBody Map<String, String> request) {
+        try {
+            Long userId = securityUtil.getCurrentUserId();
+            String title = request.get("title");
+            ChatRoom chatRoom = chatRoomService.updateChatRoomTitle(chatRoomId, userId, title);
             return ResponseEntity.ok(chatRoom);
         } catch (Exception e) {
             return ResponseEntity.badRequest()

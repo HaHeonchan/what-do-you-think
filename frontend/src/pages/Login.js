@@ -7,7 +7,8 @@ const Login = () => {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const [guestLoading, setGuestLoading] = useState(false)
+  const { login, guestLogin } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
@@ -22,6 +23,19 @@ const Login = () => {
       setError(err.response?.data?.error || "로그인에 실패했습니다.")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGuestLogin = async () => {
+    setError("")
+    setGuestLoading(true)
+    try {
+      await guestLogin()
+      navigate("/chat-rooms")
+    } catch (err) {
+      setError(err.response?.data?.error || "게스트 모드 시작에 실패했습니다.")
+    } finally {
+      setGuestLoading(false)
     }
   }
 
@@ -68,6 +82,14 @@ const Login = () => {
           </form>
 
           <div style={styles.divider}></div>
+
+          <button 
+            onClick={handleGuestLogin} 
+            disabled={loading || guestLoading}
+            style={styles.guestButton}
+          >
+            {guestLoading ? "게스트 모드 시작 중..." : "게스트로 시작하기"}
+          </button>
 
           <Link to="/register" style={styles.link}>
             계정이 없으신가요? <span style={styles.linkText}>회원가입</span>
@@ -183,6 +205,19 @@ const styles = {
   linkText: {
     color: "#3b82f6",
     fontWeight: "600",
+  },
+  guestButton: {
+    padding: "12px 24px",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    color: "#10b981",
+    border: "1px solid rgba(16, 185, 129, 0.3)",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "600",
+    cursor: "pointer",
+    marginBottom: "16px",
+    transition: "all 0.3s ease",
+    width: "100%",
   },
 }
 

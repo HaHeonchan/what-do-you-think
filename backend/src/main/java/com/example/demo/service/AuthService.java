@@ -70,5 +70,36 @@ public class AuthService {
 
         return new AuthResponseDTO(token, member.getId(), member.getUsername(), member.getEmail());
     }
+
+    @Transactional
+    public AuthResponseDTO createGuest() {
+        // 고유한 게스트 사용자명 생성
+        String guestUsername;
+        int attempt = 0;
+        do {
+            guestUsername = "guest_" + System.currentTimeMillis() + "_" + (int)(Math.random() * 1000);
+            attempt++;
+            if (attempt > 10) {
+                throw new RuntimeException("게스트 사용자 생성에 실패했습니다. 다시 시도해주세요.");
+            }
+        } while (memberRepository.existsByUsername(guestUsername));
+
+        // 임시 비밀번호 생성 (게스트는 로그인하지 않으므로 랜덤 비밀번호 사용)
+        String tempPassword = passwordEncoder.encode("guest_temp_" + System.currentTimeMillis());
+
+        // 게스트 사용자 생성
+        Member guestMember = Member.builder()
+                .username(guestUsername)
+                .email(null) // 게스트는 이메일 없음
+                .password(tempPassword)
+                .build();
+
+        guestMember = memberRepository.save(guestMember);
+
+        // JWT 토큰 생성
+        String token = jwtUtil.generateToken(guestMember.getId(), guestMember.getUsername());
+
+        return new AuthResponseDTO(token, guestMember.getId(), guestMember.getUsername(), null);
+    }
 }
 

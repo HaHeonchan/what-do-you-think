@@ -1,4 +1,3 @@
-build
 bin
 .gradle
 .git
@@ -8,4 +7,8 @@ HELP.md
 *.log
 .DS_Store
 src/test
+# build 디렉토리는 제외하되, JAR 파일은 포함
+build/*
+!build/libs/
+!build/libs/*.jar
 

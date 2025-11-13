@@ -56,9 +56,31 @@ jobs:
         key: ${{ secrets.PRIVATE_KEY }} # pem 키
         # 도커 작업
         script: |
+          # 기존 컨테이너 중지 및 제거
+          docker stop what-do-you-think-backend || true
+          docker rm what-do-you-think-backend || true
+          
+          # 최신 이미지 가져오기
           docker pull ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
-          docker stop $(docker ps -a -q) || true
-          docker run -d --log-driver=syslog -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
+          
+          # 새 컨테이너 실행 (환경 변수는 application-prod.yml에서 읽음)
+          docker run -d \
+            --name what-do-you-think-backend \
+            --restart unless-stopped \
+            -p 8080:8080 \
+            ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
+          
+          # 컨테이너 상태 확인
+          sleep 5
+          docker ps -a | grep what-do-you-think-backend
+          
+          # 컨테이너 로그 확인 (최근 50줄)
+          echo "=== Container Logs ==="
+          docker logs --tail 50 what-do-you-think-backend || true
+          
+          # 종료된 컨테이너 정리
           docker rm $(docker ps --filter 'status=exited' -a -q) || true
+          
+          # 사용하지 않는 이미지 정리
           docker image prune -a -f
 

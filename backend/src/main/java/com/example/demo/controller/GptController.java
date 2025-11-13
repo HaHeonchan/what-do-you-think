@@ -93,11 +93,6 @@ public class GptController {
             ChatResponseDTO response = chatService.askQuestion(requestDto);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            // "이미 처리 중" 에러는 409 Conflict로 반환
-            if (e.getMessage() != null && e.getMessage().contains("이미 처리 중")) {
-                return ResponseEntity.status(409)
-                        .body(new ChatResponseDTO("이미 처리 중인 요청이 있습니다. 잠시 후 다시 시도해주세요."));
-            }
             return ResponseEntity.internalServerError()
                     .body(new ChatResponseDTO("오류가 발생했습니다: " + e.getMessage()));
         }
@@ -167,19 +162,6 @@ public class GptController {
             String title = request.get("title");
             ChatRoom chatRoom = chatRoomService.updateChatRoomTitle(chatRoomId, userId, title);
             return ResponseEntity.ok(chatRoom);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    // 대화방 삭제
-    @DeleteMapping("/chat-rooms/{chatRoomId}")
-    public ResponseEntity<?> deleteChatRoom(@PathVariable Long chatRoomId) {
-        try {
-            Long userId = securityUtil.getCurrentUserId();
-            chatRoomService.deleteChatRoom(chatRoomId, userId);
-            return ResponseEntity.ok(Map.of("message", "대화방이 삭제되었습니다."));
         } catch (Exception e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));

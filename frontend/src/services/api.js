@@ -56,7 +56,6 @@ export const chatRoomAPI = {
   getById: (id) => api.get(`/chat-rooms/${id}`),
   updateNote: (id, data) => api.put(`/chat-rooms/${id}/note`, data),
   updateTitle: (id, data) => api.put(`/chat-rooms/${id}/title`, data),
-  delete: (id) => api.delete(`/chat-rooms/${id}`),
   getHistory: (id) => api.get(`/chat-rooms/${id}/history`),
   getStatistics: (id) => api.get(`/chat-rooms/${id}/statistics`),
 };

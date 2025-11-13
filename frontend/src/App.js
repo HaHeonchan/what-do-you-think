@@ -1,6 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { ChatProcessingProvider } from './contexts/ChatProcessingContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -21,19 +20,17 @@ const PublicRoute = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <ChatProcessingProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-            <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
-            <Route 
-              path="/chat-rooms" 
-              element={<ProtectedRoute><MainLayout /></ProtectedRoute>} 
-            />
-            <Route path="/" element={<Navigate to="/chat-rooms" replace />} />
-          </Routes>
-        </Router>
-      </ChatProcessingProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
+          <Route 
+            path="/chat-rooms" 
+            element={<ProtectedRoute><MainLayout /></ProtectedRoute>} 
+          />
+          <Route path="/" element={<Navigate to="/chat-rooms" replace />} />
+        </Routes>
+      </Router>
     </AuthProvider>
   );
 }

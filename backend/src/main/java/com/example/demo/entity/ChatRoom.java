@@ -58,10 +58,6 @@ public class ChatRoom {
     @Builder.Default
     private Long totalTokensUsed = 0L;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean isProcessing = false; // 요청 처리 중인지 여부
-
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
@@ -72,9 +68,6 @@ public class ChatRoom {
         }
         if (totalTokensUsed == null) {
             totalTokensUsed = 0L;
-        }
-        if (isProcessing == null) {
-            isProcessing = false;
         }
     }
 

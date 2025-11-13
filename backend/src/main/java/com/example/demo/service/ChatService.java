@@ -445,6 +445,12 @@ public class ChatService {
     // 사회자 응답 JSON 파싱
     private ModeratorResponseDTO parseModerator(String responseText) {
         try {
+            // 에러 메시지인 경우 파싱하지 않음
+            if (responseText == null || responseText.trim().startsWith("오류:")) {
+                System.err.println("사회자 응답 파싱 실패: 에러 메시지 감지 - " + responseText);
+                return null;
+            }
+            
             // GPT가 ```json ... ``` 형태로 반환할 경우 추출
             String jsonText = responseText.trim();
             if (jsonText.contains("```json")) {

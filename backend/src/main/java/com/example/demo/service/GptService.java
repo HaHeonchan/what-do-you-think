@@ -37,7 +37,7 @@ public class GptService {
         OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder()
                 .model("gpt-5-nano-2025-08-07")
                 .temperature(1.0);
-        // 2. [핵심] "moderator"일 경우 JSON 모드 활성화
+        // 2. "moderator"일 경우 JSON 모드 활성화
         if ("moderator".equals(senderRole)) {
             String schema = """
             {
@@ -57,9 +57,10 @@ public class GptService {
                 },
                 "shouldEnd": {
                   "type": "boolean",
-                  "description": "대화를 종료할지 여부. 충분히 논의되었다고 판단되면 true로 설정하세요."
+                  "description": "대화를 종료할지 여부. 충분히 논의되었다고 판단되면 true로 설정."
                 }
               },
+              "required": ["request", "shouldEnd"],
               "additionalProperties": false
             }
            """;

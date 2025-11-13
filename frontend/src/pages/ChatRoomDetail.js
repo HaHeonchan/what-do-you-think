@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { chatRoomAPI, gptAPI } from "../services/api"
 import { Edit2, Check, X } from "lucide-react"
 import { formatModeratorMessage } from "../utils/moderatorFormatter"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
 
 const ChatRoomDetail = () => {
   const { id } = useParams()
@@ -26,6 +27,31 @@ const ChatRoomDetail = () => {
     { key: "analyst", label: "분석가", emoji: "📊" },
     { key: "researcher", label: "웹 검색", emoji: "🌐" },
   ]
+
+  // 역할 이름 매핑 (영문 -> 한글)
+  const roleNameMap = {
+    creator: "생성자",
+    critic: "비판자",
+    analyst: "분석가",
+    researcher: "웹 검색",
+    moderator: "사회자",
+    summarizer: "요약자",
+  }
+
+  // 통계 데이터를 그래프용으로 변환
+  const getChartData = () => {
+    if (!statistics?.roleParticipationCount) return []
+    return Object.entries(statistics.roleParticipationCount)
+      .map(([role, count]) => ({
+        name: roleNameMap[role] || role,
+        value: count,
+        role: role,
+      }))
+      .sort((a, b) => b.value - a.value)
+  }
+
+  // 파이 차트 색상
+  const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"]
 
   const handleRoleToggle = (roleKey) => {
     setPromptKeys((prev) => {
@@ -303,13 +329,77 @@ const ChatRoomDetail = () => {
           {statistics.roleParticipationCount && (
             <div style={styles.roleSection}>
               <h3 style={styles.roleTitle}>역할별 참여 횟수</h3>
+              
+              {/* 막대 그래프 */}
+              <div style={styles.chartContainer}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={getChartData()}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(59, 130, 246, 0.1)" />
+                    <XAxis 
+                      dataKey="name" 
+                      stroke="#a0a0a0"
+                      style={{ fontSize: "12px" }}
+                    />
+                    <YAxis 
+                      stroke="#a0a0a0"
+                      style={{ fontSize: "12px" }}
+                    />
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: "rgba(15, 20, 25, 0.95)",
+                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                        borderRadius: "8px",
+                        color: "#e0e0e0",
+                      }}
+                    />
+                    <Legend 
+                      wrapperStyle={{ color: "#e0e0e0" }}
+                    />
+                    <Bar dataKey="value" fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* 파이 차트 */}
+              <div style={styles.chartContainer}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={getChartData()}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {getChartData().map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{
+                        backgroundColor: "rgba(15, 20, 25, 0.95)",
+                        border: "1px solid rgba(59, 130, 246, 0.3)",
+                        borderRadius: "8px",
+                        color: "#e0e0e0",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* 리스트 (기존 유지) */}
               <div style={styles.roleList}>
-                {Object.entries(statistics.roleParticipationCount).map(([role, count]) => (
-                  <div key={role} style={styles.roleItem}>
-                    <span style={styles.roleName}>{role}</span>
-                    <span style={styles.roleCount}>{count}회</span>
-                  </div>
-                ))}
+                {Object.entries(statistics.roleParticipationCount)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([role, count]) => (
+                    <div key={role} style={styles.roleItem}>
+                      <span style={styles.roleName}>{roleNameMap[role] || role}</span>
+                      <span style={styles.roleCount}>{count}회</span>
+                    </div>
+                  ))}
               </div>
             </div>
           )}
@@ -617,6 +707,14 @@ const styles = {
     backgroundColor: "rgba(26, 31, 46, 0.6)",
     borderRadius: "10px",
     border: "1px solid rgba(59, 130, 246, 0.2)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "24px",
+  },
+  chartContainer: {
+    width: "100%",
+    height: "300px",
+    marginBottom: "20px",
   },
   roleTitle: {
     fontSize: "16px",

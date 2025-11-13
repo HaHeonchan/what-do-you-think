@@ -1,5 +1,5 @@
 # 배포용 Dockerfile (GitHub Actions에서 빌드된 JAR 사용)
-FROM openjdk:17-alpine
+FROM eclipse-temurin:17-jre-alpine
 
 ARG JAR_FILE=build/libs/demo-0.0.1-SNAPSHOT.jar
 

@@ -34,14 +34,18 @@ jobs:
       working-directory: .
 
     - name: Build with Gradle
-      run: ./gradlew build -x test
+      run: ./gradlew bootJar -x test
       working-directory: ./backend
+
+    - name: Verify JAR file exists
+      run: |
+        ls -la backend/build/libs/
+        test -f backend/build/libs/demo-0.0.1-SNAPSHOT.jar || (echo "JAR file not found!" && exit 1)
 
     - name: Docker build
       run: |
         docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-        docker build -t app -f backend/Dockerfile --build-arg JAR_FILE=build/libs/demo-0.0.1-SNAPSHOT.jar ./backend
-        docker tag app ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest -f backend/Dockerfile --build-arg JAR_FILE=build/libs/demo-0.0.1-SNAPSHOT.jar ./backend
         docker push ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
 
     - name: Deploy

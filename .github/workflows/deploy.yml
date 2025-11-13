@@ -1,0 +1,60 @@
+name: Java CI with Gradle
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: make application-prod.yml
+      run: |
+        cd ./backend/src/main/resources
+        touch ./application-prod.yml
+        echo "${{ secrets.APPLICATION_PROD }}" > ./application-prod.yml
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x backend/gradlew
+      working-directory: .
+
+    - name: Build with Gradle
+      run: ./gradlew build -x test
+      working-directory: ./backend
+
+    - name: Docker build
+      run: |
+        docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+        docker build -t app -f backend/Dockerfile --build-arg JAR_FILE=build/libs/demo-0.0.1-SNAPSHOT.jar ./backend
+        docker tag app ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
+
+    - name: Deploy
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.HOST }} # EC2 인스턴스 퍼블릭 DNS
+        username: ec2-user
+        key: ${{ secrets.PRIVATE_KEY }} # pem 키
+        # 도커 작업
+        script: |
+          docker pull ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
+          docker stop $(docker ps -a -q) || true
+          docker run -d --log-driver=syslog -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/what-do-you-think:latest
+          docker rm $(docker ps --filter 'status=exited' -a -q) || true
+          docker image prune -a -f
+
